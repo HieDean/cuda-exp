@@ -6,6 +6,7 @@ find_package(spdlog REQUIRED) # apt-get install libspdlog-dev
 find_package(fmt REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
+set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
 

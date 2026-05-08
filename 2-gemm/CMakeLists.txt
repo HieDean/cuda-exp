@@ -1,10 +1,13 @@
-add_executable(gemm
-    gemm.cu
+add_executable(gemm_test
+    gemm_test.cc
+    gemm_v0.cu
+    gemm_v1.cu
+    gemm_v2.cu
 )
 
-target_compile_options(gemm PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
+target_compile_options(gemm_test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
 
-target_link_libraries(gemm PRIVATE
+target_link_libraries(gemm_test PRIVATE
     common
     spdlog
     fmt
