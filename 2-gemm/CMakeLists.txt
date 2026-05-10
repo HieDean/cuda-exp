@@ -3,6 +3,7 @@ add_executable(gemm_test
     gemm_v0.cu
     gemm_v1.cu
     gemm_v2.cu
+    gemm_v3.cu
 )
 
 target_compile_options(gemm_test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)

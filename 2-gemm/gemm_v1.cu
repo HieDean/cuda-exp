@@ -25,6 +25,9 @@ __global__ void gemm_kernel_v1(const float *A, const float *B, float *C,
          * ----------------------------------------------------
          * 这里写入 shared memory 的时候, 当 threadIdx.y 固定, threadIdx.x 从 0 到 31 访问 smem_a 和 smem_b 的时候,
          * 访问的是长度为 32 的连续地址, 恰好访问 32 个不同的 bank, 不存在 bank conflict;
+         * rethinking:
+         *      x 方向是一个 warp, 一个 warp 中的线程会同时访问 smem_a 中的连续 bank;
+         *      下个 warp 访问冲突 bank 的时候, 已经不是相同的时钟周期, 所以不满足 bank 冲突定义中, "同时" 这个限定;
          */
 
         int ida_y = row;
@@ -53,8 +56,8 @@ __global__ void gemm_kernel_v1(const float *A, const float *B, float *C,
 
         /**
          * 这里访问 shared memory:
-         * 当 threadIdx.y 固定, threadIdx.x 从 0 到 31 访问 smem_a 的时候, 访问的是相同的地址, 即 smem_a[threadIdx.y * TILE_K + ii], 因此触发 broadcast;
-         * 当 threadIdx.y 固定, threadIdx.x 从 0 到 31 访问 smem_b 的时候, 访问的是长度为 32 的连续地址, 恰好访问 32 个不同的 bank, 不存在 bank conflict;
+         * 当 threadIdx.y 固定(同一个 warp 内), threadIdx.x 从 0 到 31 访问 smem_b 的时候, 访问的是长度为 32 的连续地址(连续 bank), 恰好访问 32 个不同的 bank, 不存在 bank conflict;
+         * 当 threadIdx.y 固定(同一个 warp 内), threadIdx.x 从 0 到 31 访问 smem_a 的时候, 访问的是相同的地址, 即 smem_a[threadIdx.y * TILE_K + ii], 因此触发 broadcast;
          * PS: bank 布局: smem[0](bank0) smem[1](bank1) smem[2](bank2) ... smem[31](bank31) smem[32](bank0) ...
          */
         for (int ii = 0; ii < TILE_K; ++ii)
