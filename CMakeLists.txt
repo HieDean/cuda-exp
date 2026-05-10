@@ -20,5 +20,5 @@ set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCHS}")
 
 add_subdirectory(common)
 # add_subdirectory(0-reduce)
-# add_subdirectory(1-dot)
+add_subdirectory(1-dot)
 add_subdirectory(2-gemm)
