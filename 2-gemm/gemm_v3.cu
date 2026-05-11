@@ -157,6 +157,12 @@ int gemm_v3(const float *A, const float *B, float *C,
     // constexpr int numThreadsPerBlock = 1024;
 
     // !!!为什么这组配置要比上面配置的性能好那么多???
+    // 之所以下面的配置性能更好, 是基于计算访存比分析之后得到的结果:
+    // 在不考虑合并访存的情况下, tile_m 和 tile_n 越大, 计算访存比越高, 每个线程的计算量越大, 用到的寄存器, shared memory 越多,
+    // 这在 v0 以及 v1 的版本中是有利的, 但如果 tile_m 和 tile_n 太大, 回导致 block 数量过度变少, 以及寄存器和 shared memory 的使用过多,
+    // 从而导致并行度过低, 无法充分利用 GPU 的计算资源, 反而性能下降;
+    // 前人的实验结果表明, tile_m = 128 tile_n = 128 tile_k = 8 是一个比较好的配置;
+    // numThreadsPerBlock不能太大, 也是处于相同的考量;
     constexpr int tile_m = 128;
     constexpr int tile_n = 128;
     constexpr int tile_k = 8;

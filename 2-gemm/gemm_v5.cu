@@ -1,7 +1,9 @@
 #include "gemm_vx.h"
 
+#define FLOAT4(value) (reinterpret_cast<float4*>(&(value))[0])
+
 template <int TILE_M, int TILE_N, int TILE_K, int BLOCKDIM_X_A, int BLOCKDIM_X_B, int BLOCKDIM_X_C, int WARPDIM_X, int BLOCKDIM>
-__global__ void gemm_kernel_v4(const float *A, const float *B, float *C,
+__global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
                                int m, int n, int k)
 {
     int tile_y0 = blockIdx.y * TILE_M;
@@ -89,15 +91,21 @@ __global__ void gemm_kernel_v4(const float *A, const float *B, float *C,
         for (int kk = 0; kk < TILE_K; ++kk)
         {
             float smem_a_xx_kk[WORKLOAD_Y];
+            // 原始版本中, 每个线程在循环内加载 smem_a 是按列加载的, 无法使用 float4 进行向量化
             for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C, ++idw_y)
             {
                 smem_a_xx_kk[idw_y] = smem_a[(rs + rewarp_id_y) * TILE_K + kk];
             }
 
             float smem_b_kk_xx[WORKLOAD_X];
-            for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
+            // 原始版本中, 每个线程在循环内加载 smem_b 是按行加载的, 可以使用 float4 进行向量化
+            // for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
+            // {
+            //     smem_b_kk_xx[idw_x] = smem_b[kk * TILE_N + cs + rewarp_id_x];
+            // }
+            for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X * 4; cs += BLOCKDIM_X_C * 4, idw_x += 4)
             {
-                smem_b_kk_xx[idw_x] = smem_b[kk * TILE_N + cs + rewarp_id_x];
+                FLOAT4(smem_b_kk_xx[idw_x]) = FLOAT4(smem_b[kk * TILE_N + cs + rewarp_id_x * 4]);
             }
 
             for (int idw_y = 0; idw_y < WORKLOAD_Y; ++idw_y)
@@ -117,12 +125,13 @@ __global__ void gemm_kernel_v4(const float *A, const float *B, float *C,
     for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C, ++idw_y)
     {
         int idc_y = tile_y0 + rs + rewarp_id_y;
-        for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
+        // for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
+        for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X * 4; cs += BLOCKDIM_X_C * 4, idw_x += 4)
         {
-            int idc_x = tile_x0 + cs + rewarp_id_x;
+            int idc_x = tile_x0 + cs + rewarp_id_x * 4;
             if (idc_y < m && idc_x < n)
             {
-                C[idc_y * n + idc_x] = workload[idw_y * WORKLOAD_X + idw_x];
+                FLOAT4(C[idc_y * n + idc_x]) = FLOAT4(workload[idw_y * WORKLOAD_X + idw_x]);
             }
         }
     }
@@ -130,9 +139,11 @@ __global__ void gemm_kernel_v4(const float *A, const float *B, float *C,
     return;
 }
 
-int gemm_v4(const float *A, const float *B, float *C,
+int gemm_v5(const float *A, const float *B, float *C,
             int m, int n, int k, cudaStream_t stream)
 {
+    // gemm_v5 使用 float4 进行向量化访存, 但如果在加载 A 和 B 的时候就使用 float4, 那就要求 A 和 B 的内存地址都是 4 字节对齐的, 这样就失去了通用性
+    // 因此, 只在加载 smem_a 和 smem_b 的时候使用 float4
     constexpr int tile_m = 128;
     constexpr int tile_n = 128;
     constexpr int tile_k = 8;
@@ -148,7 +159,7 @@ int gemm_v4(const float *A, const float *B, float *C,
     dim3 gridDims(gridDim_x, gridDim_y);
 
     constexpr int smemSize = tile_m * tile_k + tile_n * tile_k;
-    gemm_kernel_v4<tile_m, tile_n, tile_k, blockDim_x_a, blockDim_x_b, blockDim_x_c, warpDim_x, numThreadsPerBlock>
+    gemm_kernel_v5<tile_m, tile_n, tile_k, blockDim_x_a, blockDim_x_b, blockDim_x_c, warpDim_x, numThreadsPerBlock>
         <<<gridDims, blockDims, smemSize * sizeof(float), stream>>>(A, B, C, m, n, k);
     return 0;
 }
