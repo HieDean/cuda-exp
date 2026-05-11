@@ -1,14 +1,3 @@
-/**
- * simple compile:
- *     nvcc -o gemm gemm.cu -lspdlog -lfmt -lcudart -lcublas
- * for ncu and nsys:
- *     nvcc -o gemm gemm.cu -lspdlog -lfmt -lcudart -lcublas -lineinfo
- *     ncu --set full -o report -f ./gemm
- *     nsys profile --stats true ./gemm
- * for specific arch:
- *     nvcc -o gemm gemm.cu -lspdlog -lfmt -lcudart -lcublas -lineinfo -arch=compute_120 -code=sm_120
- */
-
 #include <random>
 #include <cmath>
 #include <ctime>
@@ -149,20 +138,19 @@ int main(int argc, char **argv)
     checkCudaErrors(cudaStreamSynchronize(stream));
 
     // gemm_v0
-    helper(gemm_v0, A, B, C, m, n, k, stream,
-           5, 10, c, "gemm_v0");
+    helper(gemm_v0, A, B, C, m, n, k, stream, 5, 10, c, "gemm_v0");
 
     // gemm_v1
-    helper(gemm_v1, A, B, C, m, n, k, stream,
-           5, 10, c, "gemm_v1");
+    helper(gemm_v1, A, B, C, m, n, k, stream, 5, 10, c, "gemm_v1");
 
     // gemm_v2
-    helper(gemm_v2, A, B, C, m, n, k, stream,
-           5, 10, c, "gemm_v2");
+    helper(gemm_v2, A, B, C, m, n, k, stream, 5, 10, c, "gemm_v2");
 
     // gemm_v3
-    helper(gemm_v3, A, B, C, m, n, k, stream,
-           5, 10, c, "gemm_v3");
+    helper(gemm_v3, A, B, C, m, n, k, stream, 5, 10, c, "gemm_v3");
+
+    // gemm_v4
+    helper(gemm_v4, A, B, C, m, n, k, stream, 5, 10, c, "gemm_v4");
 
     {
         // cublasSgemm

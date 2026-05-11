@@ -1,7 +1,7 @@
 #include "gemm_vx.h"
 
-template <int TILE_M, int TILE_N, int TILE_K, int BLOCKDIM_X_A, int BLOCKDIM_X_B, int BLOCKDIM_X_C, int BLOCKDIM>
-__global__ void gemm_kernel_v3(const float *A, const float *B, float *C,
+template <int TILE_M, int TILE_N, int TILE_K, int BLOCKDIM_X_A, int BLOCKDIM_X_B, int BLOCKDIM_X_C, int WARPDIM_X, int BLOCKDIM>
+__global__ void gemm_kernel_v4(const float *A, const float *B, float *C,
                                int m, int n, int k)
 {
     int tile_y0 = blockIdx.y * TILE_M;
@@ -30,6 +30,20 @@ __global__ void gemm_kernel_v3(const float *A, const float *B, float *C,
     int tid_x_b = tid % BLOCKDIM_X_B;
     int tid_y_c = tid / BLOCKDIM_X_C;
     int tid_x_c = tid % BLOCKDIM_X_C;
+
+    constexpr int WARP_SIZE = 32;
+    constexpr int WARPDIM_Y = WARP_SIZE / WARPDIM_X;      // 4
+    constexpr int NUM_WARPS = BLOCKDIM / WARP_SIZE;       // 8
+    constexpr int NUM_WARPS_X = BLOCKDIM_X_C / WARPDIM_X; // 2
+    constexpr int NUM_WARPS_Y = BLOCKDIM_Y_C / WARPDIM_Y; // 4
+    int warp_id = tid / WARP_SIZE;
+    int warp_id_y = warp_id / NUM_WARPS_X;
+    int warp_id_x = warp_id % NUM_WARPS_X;
+    int lane_id = tid % WARP_SIZE;
+    int lane_id_y = lane_id / WARPDIM_X;
+    int lane_id_x = lane_id % WARPDIM_X;
+    int rewarp_id_y = warp_id_y * WARPDIM_Y + lane_id_y;
+    int rewarp_id_x = warp_id_x * WARPDIM_X + lane_id_x;
 
     extern __shared__ char smem_v3[];
     float *smem_a = (float *)smem_v3;         // [TILE_M, TILE_K]
@@ -65,55 +79,28 @@ __global__ void gemm_kernel_v3(const float *A, const float *B, float *C,
 
         __syncthreads();
 
-        // 对 smem_a 和 smem_b 做矩阵乘, 这里分别实现内积外积两种方式, 实测内积要快一些, 不明白为什么
-        // 使用 BLOCKDIM_Y_C*BLOCKDIM_X_C 个线程计算 TILE_M*TILE_N 个数写入 smem_a 和 smem_b
-
-        // 内积
-        // for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C, ++idw_y)
-        // {
-        //     for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
-        //     {
-        //         for (int kk = 0; kk < TILE_K; ++kk)
-        //         {
-        //             workload[idw_y * WORKLOAD_X + idw_x] += smem_a[(rs + tid_y_c) * TILE_K + kk] *
-        //                                                     smem_b[kk * TILE_N + cs + tid_x_c];
-        //         }
-        //     }
-        // }
-
-        // 外积
-        // for (int kk = 0; kk < TILE_K; ++kk)
-        // {
-        //     for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C, ++idw_y)
-        //     {
-        //         float smem_a_rs_kk = smem_a[(rs + tid_y_c) * TILE_K + kk];
-        //         for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
-        //         {
-        //             workload[idw_y * WORKLOAD_X + idw_x] += smem_a_rs_kk * smem_b[kk * TILE_N + cs + tid_x_c];
-        //         }
-        //     }
-        // }
-
+        // 对 smem_a 和 smem_b 做矩阵乘
+        // 使用 BLOCKDIM_Y_C*BLOCKDIM_X_C 个线程计算 TILE_M*TILE_N 个数写入 workload, 每个线程计算 WORKLOAD_Y*WORKLOAD_X 个数
         // 外积, 但使用 register
         for (int kk = 0; kk < TILE_K; ++kk)
         {
             float smem_a_xx_kk[WORKLOAD_Y];
             for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C, ++idw_y)
             {
-                smem_a_xx_kk[idw_y] = smem_a[(rs + tid_y_c) * TILE_K + kk];
+                smem_a_xx_kk[idw_y] = smem_a[(rs + rewarp_id_y) * TILE_K + kk];
             }
 
-            float smem_a_kk_xx[WORKLOAD_X];
+            float smem_b_kk_xx[WORKLOAD_X];
             for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
             {
-                smem_a_kk_xx[idw_x] = smem_b[kk * TILE_N + cs + tid_x_c];
+                smem_b_kk_xx[idw_x] = smem_b[kk * TILE_N + cs + rewarp_id_x];
             }
 
             for (int idw_y = 0; idw_y < WORKLOAD_Y; ++idw_y)
             {
                 for (int idw_x = 0; idw_x < WORKLOAD_X; ++idw_x)
                 {
-                    workload[idw_y * WORKLOAD_X + idw_x] += smem_a_xx_kk[idw_y] * smem_a_kk_xx[idw_x];
+                    workload[idw_y * WORKLOAD_X + idw_x] += smem_a_xx_kk[idw_y] * smem_b_kk_xx[idw_x];
                 }
             }
         }
@@ -125,10 +112,10 @@ __global__ void gemm_kernel_v3(const float *A, const float *B, float *C,
     // 每个线程写入 WORKLOAD_Y * WORKLOAD_X 个数
     for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C, ++idw_y)
     {
-        int idc_y = tile_y0 + rs + tid_y_c;
+        int idc_y = tile_y0 + rs + rewarp_id_y;
         for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
         {
-            int idc_x = tile_x0 + cs + tid_x_c;
+            int idc_x = tile_x0 + cs + rewarp_id_x;
             if (idc_y < m && idc_x < n)
             {
                 C[idc_y * n + idc_x] = workload[idw_y * WORKLOAD_X + idw_x];
@@ -139,30 +126,16 @@ __global__ void gemm_kernel_v3(const float *A, const float *B, float *C,
     return;
 }
 
-int gemm_v3(const float *A, const float *B, float *C,
+int gemm_v4(const float *A, const float *B, float *C,
             int m, int n, int k, cudaStream_t stream)
 {
-    // gemm_v3 的优点在于, 可以根据 ABC 大小来灵活调整 tile 的大小和 block 的大小
-    // 使用 1024 个线程, 计算 C 中的 128 * 64 个点
-    // constexpr int tile_m = 128;
-    // constexpr int tile_n = 64;
-    // constexpr int tile_k = 32;
-
-    // 使用 1 维线程块, 在 kernel 内部根据 tile 大小重新组织 block
-    // 这里定义 block 在读写 ABC 时的 x 方向的大小, 由于 block 大小固定, 所以 y 方向的大小也可以确定
-    // 这里为了访存合并和避免 bank 冲突, x 方向的大小均设置为 32 的倍数
-    // constexpr int blockDim_x_a = 32;
-    // constexpr int blockDim_x_b = 64;
-    // constexpr int blockDim_x_c = 64;
-    // constexpr int numThreadsPerBlock = 1024;
-
-    // !!!为什么这组配置要比上面配置的性能好那么多???
     constexpr int tile_m = 128;
     constexpr int tile_n = 128;
     constexpr int tile_k = 8;
     constexpr int blockDim_x_a = 8;
     constexpr int blockDim_x_b = 32;
     constexpr int blockDim_x_c = 16;
+    constexpr int warpDim_x = 8;
     constexpr int numThreadsPerBlock = 256;
     dim3 blockDims(numThreadsPerBlock);
 
@@ -171,7 +144,7 @@ int gemm_v3(const float *A, const float *B, float *C,
     dim3 gridDims(gridDim_x, gridDim_y);
 
     constexpr int smemSize = tile_m * tile_k + tile_n * tile_k;
-    gemm_kernel_v3<tile_m, tile_n, tile_k, blockDim_x_a, blockDim_x_b, blockDim_x_c, numThreadsPerBlock>
+    gemm_kernel_v4<tile_m, tile_n, tile_k, blockDim_x_a, blockDim_x_b, blockDim_x_c, warpDim_x, numThreadsPerBlock>
         <<<gridDims, blockDims, smemSize * sizeof(float), stream>>>(A, B, C, m, n, k);
     return 0;
 }
