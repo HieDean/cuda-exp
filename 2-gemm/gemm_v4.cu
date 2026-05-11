@@ -28,8 +28,8 @@ __global__ void gemm_kernel_v4(const float *A, const float *B, float *C,
     int tid_x_a = tid % BLOCKDIM_X_A;
     int tid_y_b = tid / BLOCKDIM_X_B;
     int tid_x_b = tid % BLOCKDIM_X_B;
-    int tid_y_c = tid / BLOCKDIM_X_C;
-    int tid_x_c = tid % BLOCKDIM_X_C;
+    // int tid_y_c = tid / BLOCKDIM_X_C;
+    // int tid_x_c = tid % BLOCKDIM_X_C;
 
     // warp 重组, 一个 warp 内的线程以 [WARPDIM_Y, WARPDIM_X] 的方式组织
     // 一个 block 在 y 方向上有 NUM_WARPS_Y 个 warp, 在 x 方向上有 NUM_WARPS_X 个 warp
@@ -37,9 +37,9 @@ __global__ void gemm_kernel_v4(const float *A, const float *B, float *C,
     // 可以使用 rewarp_id_y 和 rewarp_id_x 直接代替 warp 重组之前的 tid_y_c 和 tid_x_c
     constexpr int WARP_SIZE = 32;
     constexpr int WARPDIM_Y = WARP_SIZE / WARPDIM_X;      // 4
-    constexpr int NUM_WARPS = BLOCKDIM / WARP_SIZE;       // 8
+    // constexpr int NUM_WARPS = BLOCKDIM / WARP_SIZE;       // 8
     constexpr int NUM_WARPS_X = BLOCKDIM_X_C / WARPDIM_X; // 2
-    constexpr int NUM_WARPS_Y = BLOCKDIM_Y_C / WARPDIM_Y; // 4
+    // constexpr int NUM_WARPS_Y = BLOCKDIM_Y_C / WARPDIM_Y; // 4
     int warp_id = tid / WARP_SIZE;
     int warp_id_y = warp_id / NUM_WARPS_X;
     int warp_id_x = warp_id % NUM_WARPS_X;
@@ -49,8 +49,8 @@ __global__ void gemm_kernel_v4(const float *A, const float *B, float *C,
     int rewarp_id_y = warp_id_y * WARPDIM_Y + lane_id_y;
     int rewarp_id_x = warp_id_x * WARPDIM_X + lane_id_x;
 
-    extern __shared__ char smem_v3[];
-    float *smem_a = (float *)smem_v3;         // [TILE_M, TILE_K]
+    extern __shared__ char smem[];
+    float *smem_a = (float *)smem;         // [TILE_M, TILE_K]
     float *smem_b = &smem_a[TILE_M * TILE_K]; // [TILE_K, TILE_N]
 
     for (int ks = 0; ks < k; ks += TILE_K)

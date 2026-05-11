@@ -30,30 +30,32 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
     int tid_x_a = tid % BLOCKDIM_X_A;
     int tid_y_b = tid / BLOCKDIM_X_B;
     int tid_x_b = tid % BLOCKDIM_X_B;
-    int tid_y_c = tid / BLOCKDIM_X_C;
-    int tid_x_c = tid % BLOCKDIM_X_C;
+    // int tid_y_c = tid / BLOCKDIM_X_C;
+    // int tid_x_c = tid % BLOCKDIM_X_C;
 
     // warp 重组, 一个 warp 内的线程以 [WARPDIM_Y, WARPDIM_X] 的方式组织
     // 一个 block 在 y 方向上有 NUM_WARPS_Y 个 warp, 在 x 方向上有 NUM_WARPS_X 个 warp
     // rewarp_id_y 和 rewarp_id_x 分别是重组后线程在 block 内的 y 和 x 方向的 id
     // 可以使用 rewarp_id_y 和 rewarp_id_x 直接代替 warp 重组之前的 tid_y_c 和 tid_x_c
     constexpr int WARP_SIZE = 32;
-    constexpr int WARPDIM_Y = WARP_SIZE / WARPDIM_X;      // 4
-    constexpr int NUM_WARPS = BLOCKDIM / WARP_SIZE;       // 8
-    constexpr int NUM_WARPS_X = BLOCKDIM_X_C / WARPDIM_X; // 2
-    constexpr int NUM_WARPS_Y = BLOCKDIM_Y_C / WARPDIM_Y; // 4
+    constexpr int WARPDIM_Y = WARP_SIZE / WARPDIM_X;
+    // constexpr int NUM_WARPS = BLOCKDIM / WARP_SIZE;
+    constexpr int NUM_WARPS_X = BLOCKDIM_X_C / WARPDIM_X;
+    // constexpr int NUM_WARPS_Y = BLOCKDIM_Y_C / WARPDIM_Y;
     int warp_id = tid / WARP_SIZE;
     int warp_id_y = warp_id / NUM_WARPS_X;
     int warp_id_x = warp_id % NUM_WARPS_X;
     int lane_id = tid % WARP_SIZE;
-    int lane_id_y = lane_id / WARPDIM_X;
-    int lane_id_x = lane_id % WARPDIM_X;
+    // int lane_id_y = lane_id / WARPDIM_X;
+    // int lane_id_x = lane_id % WARPDIM_X;
+    int lane_id_y = lane_id % 2 + lane_id / 16 * 2; // z-order
+    int lane_id_x = lane_id % 16 / 2;
     int rewarp_id_y = warp_id_y * WARPDIM_Y + lane_id_y;
     int rewarp_id_x = warp_id_x * WARPDIM_X + lane_id_x;
 
-    extern __shared__ char smem_v3[];
-    float *smem_a = (float *)smem_v3;         // [TILE_M, TILE_K]
-    float *smem_b = &smem_a[TILE_M * TILE_K]; // [TILE_K, TILE_N]
+    extern __shared__ char smem[];
+    float *smem_a = (float *)smem;            // [TILE_K, TILE_M] // transpose
+    float *smem_b = &smem_a[TILE_K * TILE_M]; // [TILE_K, TILE_N]
 
     for (int ks = 0; ks < k; ks += TILE_K)
     {
@@ -66,7 +68,8 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
             {
                 int idsa_x = cs + tid_x_a;
                 int ida_x = ks + idsa_x;
-                smem_a[idsa_y * TILE_K + idsa_x] = (ida_y < m && ida_x < k) ? A[ida_y * k + ida_x] : 0.0;
+                int swizzle =  idsa_y ^ (4 * idsa_x); // swizzle
+                smem_a[idsa_x * TILE_M + swizzle] = (ida_y < m && ida_x < k) ? A[ida_y * k + ida_x] : 0.0; // transpose
             }
         }
 
@@ -92,18 +95,16 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
         {
             float smem_a_xx_kk[WORKLOAD_Y];
             // 原始版本中, 每个线程在循环内加载 smem_a 是按列加载的, 无法使用 float4 进行向量化
-            for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C, ++idw_y)
+            // 所以需要对 smem_a 进行转置之后进行向量化访存, 转置直接在 smem 初始化阶段进行
+            for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C * 4, idw_y += 4)
             {
-                smem_a_xx_kk[idw_y] = smem_a[(rs + rewarp_id_y) * TILE_K + kk];
+                int swizzle =  (rs + rewarp_id_y * 4) ^ (4 * kk);
+                FLOAT4(smem_a_xx_kk[idw_y]) = FLOAT4(smem_a[kk * TILE_M + swizzle]);
             }
 
             float smem_b_kk_xx[WORKLOAD_X];
             // 原始版本中, 每个线程在循环内加载 smem_b 是按行加载的, 可以使用 float4 进行向量化
-            // for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
-            // {
-            //     smem_b_kk_xx[idw_x] = smem_b[kk * TILE_N + cs + rewarp_id_x];
-            // }
-            for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X * 4; cs += BLOCKDIM_X_C * 4, idw_x += 4)
+            for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C * 4, idw_x += 4)
             {
                 FLOAT4(smem_b_kk_xx[idw_x]) = FLOAT4(smem_b[kk * TILE_N + cs + rewarp_id_x * 4]);
             }
@@ -122,16 +123,18 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
 
     // 使用 BLOCKDIM_Y_C*BLOCKDIM_X_C 个线程将 BLOCKDIM_Y_C*BLOCKDIM_X_C 个数写入 C
     // 每个线程写入 WORKLOAD_Y * WORKLOAD_X 个数
-    for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C, ++idw_y)
+    for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C * 4, idw_y += 4)
     {
-        int idc_y = tile_y0 + rs + rewarp_id_y;
-        // for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
-        for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X * 4; cs += BLOCKDIM_X_C * 4, idw_x += 4)
+        int idc_y = tile_y0 + rs + rewarp_id_y * 4;
+        for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C * 4, idw_x += 4)
         {
             int idc_x = tile_x0 + cs + rewarp_id_x * 4;
-            if (idc_y < m && idc_x < n)
+            if (idc_y + 3 < m && idc_x + 3 < n)
             {
                 FLOAT4(C[idc_y * n + idc_x]) = FLOAT4(workload[idw_y * WORKLOAD_X + idw_x]);
+                FLOAT4(C[(idc_y+1) * n + idc_x]) = FLOAT4(workload[(idw_y+1) * WORKLOAD_X + idw_x]);
+                FLOAT4(C[(idc_y+2) * n + idc_x]) = FLOAT4(workload[(idw_y+2) * WORKLOAD_X + idw_x]);
+                FLOAT4(C[(idc_y+3) * n + idc_x]) = FLOAT4(workload[(idw_y+3) * WORKLOAD_X + idw_x]);
             }
         }
     }

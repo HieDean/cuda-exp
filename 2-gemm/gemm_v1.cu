@@ -12,8 +12,8 @@ __global__ void gemm_kernel_v1(const float *A, const float *B, float *C,
         return;
     }
 
-    extern __shared__ char smem_v1[];
-    float *smem_a = (float *)smem_v1;             // [blockDim.y == TILE_M, TILE_K]
+    extern __shared__ char smem[];
+    float *smem_a = (float *)smem;             // [blockDim.y == TILE_M, TILE_K]
     float *smem_b = &smem_a[blockDim.y * TILE_K]; // [TILE_K, blockDim.x == TILE_N]
 
     float sum = 0.0;

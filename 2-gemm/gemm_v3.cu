@@ -31,8 +31,8 @@ __global__ void gemm_kernel_v3(const float *A, const float *B, float *C,
     int tid_y_c = tid / BLOCKDIM_X_C;
     int tid_x_c = tid % BLOCKDIM_X_C;
 
-    extern __shared__ char smem_v3[];
-    float *smem_a = (float *)smem_v3;         // [TILE_M, TILE_K]
+    extern __shared__ char smem[];
+    float *smem_a = (float *)smem;         // [TILE_M, TILE_K]
     float *smem_b = &smem_a[TILE_M * TILE_K]; // [TILE_K, TILE_N]
 
     for (int ks = 0; ks < k; ks += TILE_K)
