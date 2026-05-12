@@ -49,7 +49,7 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
     // int lane_id_y = lane_id / WARPDIM_X;
     // int lane_id_x = lane_id % WARPDIM_X;
     int lane_id_y = lane_id % 2 + lane_id / 16 * 2; // z-order
-    int lane_id_x = lane_id % 16 / 2;
+    int lane_id_x = lane_id % 16 / 2; // z-order
     int rewarp_id_y = warp_id_y * WARPDIM_Y + lane_id_y;
     int rewarp_id_x = warp_id_x * WARPDIM_X + lane_id_x;
 
@@ -96,19 +96,32 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
         // 外积, 但使用 register
         for (int kk = 0; kk < TILE_K; ++kk)
         {
+            // 这一部分中, 可以看到实现了两种循环方式, 一种是只有一个循环条件, 一种是有两个循环条件
+            // 实测下来, 单个循环条件的 perf 远由于两个循环条件
+
             // 原始版本中, 每个线程在循环内加载 smem_a 是按列加载的, 无法使用 float4 进行向量化
             // 所以需要对 smem_a 进行转置之后进行向量化访存, 转置直接在 smem 初始化阶段进行
-            for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C * 4, idw_y += 4)
+            for (int idw_y = 0; idw_y < WORKLOAD_Y; idw_y += 4)
             {
-                int swizzle = (rs + rewarp_id_y * 4) ^ (4 * kk);
+                int swizzle = (BLOCKDIM_Y_C * idw_y + rewarp_id_y * 4) ^ (4 * kk);
                 FLOAT4(smem_a_xx_kk[idw_y]) = FLOAT4(smem_a[kk * TILE_M + swizzle]);
             }
+            // for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C * 4, idw_y += 4)
+            // {
+            //     int swizzle = (rs + rewarp_id_y * 4) ^ (4 * kk);
+            //     FLOAT4(smem_a_xx_kk[idw_y]) = FLOAT4(smem_a[kk * TILE_M + swizzle]);
+            // }
 
             // 原始版本中, 每个线程在循环内加载 smem_b 是按行加载的, 可以使用 float4 进行向量化
-            for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C * 4, idw_x += 4)
+            for (int idw_x = 0; idw_x < WORKLOAD_X; idw_x += 4)
             {
-                FLOAT4(smem_b_kk_xx[idw_x]) = FLOAT4(smem_b[kk * TILE_N + cs + rewarp_id_x * 4]);
+                int idb_x = BLOCKDIM_X_C * idw_x + rewarp_id_x * 4;
+                FLOAT4(smem_b_kk_xx[idw_x]) = FLOAT4(smem_b[kk * TILE_N + idb_x]);
             }
+            // for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C * 4, idw_x += 4)
+            // {
+            //     FLOAT4(smem_b_kk_xx[idw_x]) = FLOAT4(smem_b[kk * TILE_N + cs + rewarp_id_x * 4]);
+            // }
 
             for (int idw_y = 0; idw_y < WORKLOAD_Y; ++idw_y)
             {
@@ -124,12 +137,12 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
 
     // 使用 BLOCKDIM_Y_C*BLOCKDIM_X_C 个线程将 BLOCKDIM_Y_C*BLOCKDIM_X_C 个数写入 C
     // 每个线程写入 WORKLOAD_Y * WORKLOAD_X 个数
-    for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C * 4, idw_y += 4)
+    for (int idw_y = 0; idw_y < WORKLOAD_Y; idw_y += 4)
     {
-        int idc_y = tile_y0 + rs + rewarp_id_y * 4;
-        for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C * 4, idw_x += 4)
+        int idc_y = tile_y0 + BLOCKDIM_Y_C * idw_y + rewarp_id_y * 4;
+        for (int idw_x = 0; idw_x < WORKLOAD_X; idw_x += 4)
         {
-            int idc_x = tile_x0 + cs + rewarp_id_x * 4;
+            int idc_x = tile_x0 + BLOCKDIM_X_C * idw_x + rewarp_id_x * 4;
             if (idc_y + 3 < m && idc_x + 3 < n)
             {
                 FLOAT4(C[idc_y * n + idc_x]) = FLOAT4(workload[idw_y * WORKLOAD_X + idw_x]);
