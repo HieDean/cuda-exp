@@ -1,6 +1,6 @@
 #include "gemm_vx.h"
 
-#define FLOAT4(value) (reinterpret_cast<float4*>(&(value))[0])
+#define FLOAT4(value) (reinterpret_cast<float4 *>(&(value))[0])
 
 template <int TILE_M, int TILE_N, int TILE_K, int BLOCKDIM_X_A, int BLOCKDIM_X_B, int BLOCKDIM_X_C, int WARPDIM_X, int BLOCKDIM>
 __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
@@ -57,6 +57,9 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
     float *smem_a = (float *)smem;            // [TILE_K, TILE_M] // transpose
     float *smem_b = &smem_a[TILE_K * TILE_M]; // [TILE_K, TILE_N]
 
+    float smem_a_xx_kk[WORKLOAD_Y];
+    float smem_b_kk_xx[WORKLOAD_X];
+
     for (int ks = 0; ks < k; ks += TILE_K)
     {
         // 使用 BLOCKDIM_Y_A*BLOCKDIM_X_A 个线程加载 TILE_M*TILE_K 个数到 smem_a
@@ -68,7 +71,7 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
             {
                 int idsa_x = cs + tid_x_a;
                 int ida_x = ks + idsa_x;
-                int swizzle =  idsa_y ^ (4 * idsa_x); // swizzle
+                int swizzle = idsa_y ^ (4 * idsa_x);                                                       // swizzle
                 smem_a[idsa_x * TILE_M + swizzle] = (ida_y < m && ida_x < k) ? A[ida_y * k + ida_x] : 0.0; // transpose
             }
         }
@@ -93,16 +96,14 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
         // 外积, 但使用 register
         for (int kk = 0; kk < TILE_K; ++kk)
         {
-            float smem_a_xx_kk[WORKLOAD_Y];
             // 原始版本中, 每个线程在循环内加载 smem_a 是按列加载的, 无法使用 float4 进行向量化
             // 所以需要对 smem_a 进行转置之后进行向量化访存, 转置直接在 smem 初始化阶段进行
             for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C * 4, idw_y += 4)
             {
-                int swizzle =  (rs + rewarp_id_y * 4) ^ (4 * kk);
+                int swizzle = (rs + rewarp_id_y * 4) ^ (4 * kk);
                 FLOAT4(smem_a_xx_kk[idw_y]) = FLOAT4(smem_a[kk * TILE_M + swizzle]);
             }
 
-            float smem_b_kk_xx[WORKLOAD_X];
             // 原始版本中, 每个线程在循环内加载 smem_b 是按行加载的, 可以使用 float4 进行向量化
             for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C * 4, idw_x += 4)
             {
@@ -132,9 +133,9 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
             if (idc_y + 3 < m && idc_x + 3 < n)
             {
                 FLOAT4(C[idc_y * n + idc_x]) = FLOAT4(workload[idw_y * WORKLOAD_X + idw_x]);
-                FLOAT4(C[(idc_y+1) * n + idc_x]) = FLOAT4(workload[(idw_y+1) * WORKLOAD_X + idw_x]);
-                FLOAT4(C[(idc_y+2) * n + idc_x]) = FLOAT4(workload[(idw_y+2) * WORKLOAD_X + idw_x]);
-                FLOAT4(C[(idc_y+3) * n + idc_x]) = FLOAT4(workload[(idw_y+3) * WORKLOAD_X + idw_x]);
+                FLOAT4(C[(idc_y + 1) * n + idc_x]) = FLOAT4(workload[(idw_y + 1) * WORKLOAD_X + idw_x]);
+                FLOAT4(C[(idc_y + 2) * n + idc_x]) = FLOAT4(workload[(idw_y + 2) * WORKLOAD_X + idw_x]);
+                FLOAT4(C[(idc_y + 3) * n + idc_x]) = FLOAT4(workload[(idw_y + 3) * WORKLOAD_X + idw_x]);
             }
         }
     }

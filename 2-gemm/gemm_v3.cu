@@ -35,6 +35,10 @@ __global__ void gemm_kernel_v3(const float *A, const float *B, float *C,
     float *smem_a = (float *)smem;         // [TILE_M, TILE_K]
     float *smem_b = &smem_a[TILE_M * TILE_K]; // [TILE_K, TILE_N]
 
+    // 计算外积用到的 register
+    float smem_a_kk_xx[WORKLOAD_X];
+    float smem_a_xx_kk[WORKLOAD_Y];
+
     for (int ks = 0; ks < k; ks += TILE_K)
     {
         // 使用 BLOCKDIM_Y_A*BLOCKDIM_X_A 个线程加载 TILE_M*TILE_K 个数到 smem_a
@@ -97,13 +101,11 @@ __global__ void gemm_kernel_v3(const float *A, const float *B, float *C,
         // 外积, 但使用 register
         for (int kk = 0; kk < TILE_K; ++kk)
         {
-            float smem_a_xx_kk[WORKLOAD_Y];
             for (int rs = 0, idw_y = 0; rs < TILE_M && idw_y < WORKLOAD_Y; rs += BLOCKDIM_Y_C, ++idw_y)
             {
                 smem_a_xx_kk[idw_y] = smem_a[(rs + tid_y_c) * TILE_K + kk];
             }
 
-            float smem_a_kk_xx[WORKLOAD_X];
             for (int cs = 0, idw_x = 0; cs < TILE_N && idw_x < WORKLOAD_X; cs += BLOCKDIM_X_C, ++idw_x)
             {
                 smem_a_kk_xx[idw_x] = smem_b[kk * TILE_N + cs + tid_x_c];
