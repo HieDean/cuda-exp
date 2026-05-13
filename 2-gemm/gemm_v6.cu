@@ -21,16 +21,27 @@ __global__ void gemm_kernel_v6(const float *A, const float *B, float *C,
         return;
     }
 
+    // 共享内存
+    // smem_a 采用列优先保存(转置)
+    __shared__ float smem_a[TILE_K][TILE_M];
+    __shared__ float smem_b[TILE_K][TILE_N];
+
+    // 寄存器
+    float reg_a_xx_kk[WORKLOAD_Y];
+    float reg_b_kk_xx[WORKLOAD_X];
+
     // 每个线程负责计算 C 中的 WORKLOAD_Y*WORKLOAD_X 个数
     float workload[WORKLOAD_Y][WORKLOAD_X] = {};
 
     // 计算线程在不同组织情况下, x 和 y 向的偏移
+    // a % b 求余运算等价于位运算 a & (b - 1)
     int tid = threadIdx.x;
     int tid_y_a = tid / BLOCKDIM_X_A;
     int tid_x_a = tid & (BLOCKDIM_X_A - 1);
     int tid_y_b = tid / BLOCKDIM_X_B;
     int tid_x_b = tid & (BLOCKDIM_X_B - 1);
 
+    // warp 重组
     int warp_id = tid / WARP_SIZE;
     int warp_id_y = warp_id / (NUM_WARP_X);
     int warp_id_x = warp_id & (NUM_WARP_X - 1);
@@ -40,15 +51,14 @@ __global__ void gemm_kernel_v6(const float *A, const float *B, float *C,
     int rewarp_id_y = warp_id_y * WARPDIM_Y + lane_id_y;
     int rewarp_id_x = warp_id_x * WARPDIM_X + lane_id_x;
 
-    __shared__ float smem_a[TILE_K][TILE_M];
-    __shared__ float smem_b[TILE_K][TILE_N];
-
-    float reg_a_xx_kk[WORKLOAD_Y];
-    float reg_b_kk_xx[WORKLOAD_X];
-
+    // k loop
+#pragma unroll
     for (int ks = 0; ks < k; ks += TILE_K)
     {
-        // 使用 BLOCKDIM_Y_A*BLOCKDIM_X_A 个线程加载 TILE_M*TILE_K 个数到 smem_a
+        // 使用1 个 block 加载 TILE_M*TILE_K 个数到 smem_a
+        // 只有 y 方向需要迭代, x 方向 BLOCKDIM_X_A == TILE_K
+        // 这里用到的 swizzle 方式是: a[y][x] => a[y][x ^ (4 * y)]
+        // 注意这里给 float 类型的变量赋值一定要用 0.0f !!!
         int ida_x = ks + tid_x_a;
 #pragma unroll
         for (int rs = 0; rs < TILE_M; rs += BLOCKDIM_Y_A)
@@ -58,7 +68,8 @@ __global__ void gemm_kernel_v6(const float *A, const float *B, float *C,
                 (ida_y < m && ida_x < k) ? A[ida_y * k + ida_x] : 0.0f;
         }
 
-        // 使用 BLOCKDIM_Y_B*BLOCKDIM_X_B 个线程加载 TILE_K*TILE_N 个数到 smem_b
+        // 使用1 个 block 加载 TILE_K*TILE_N 个数到 smem_b
+        // 只有 x 方向需要迭代, y 方向 BLOCKDIM_Y_B == TILE_K
         int idb_y = ks + tid_y_b;
 #pragma unroll
         for (int cs = 0; cs < TILE_N; cs += BLOCKDIM_X_B)
@@ -70,7 +81,8 @@ __global__ void gemm_kernel_v6(const float *A, const float *B, float *C,
 
         __syncthreads();
 
-        // 对 smem_a 和 smem_b 做矩阵乘
+        // workload = smem_a @ smem_b
+        // 采用外积 + 寄存器数组 + 向量化访存的方式
 #pragma unroll
         for (int kk = 0; kk < TILE_K; ++kk)
         {
@@ -99,7 +111,7 @@ __global__ void gemm_kernel_v6(const float *A, const float *B, float *C,
         __syncthreads();
     }
 
-    // 最后写入
+    // 计算结果写回 C 矩阵
 #pragma unroll
     for (int idw_y = 0; idw_y < WORKLOAD_Y; ++idw_y)
     {
@@ -140,7 +152,7 @@ int gemm_v6(const float *A, const float *B, float *C,
     int gridDim_y = (m + tile_m - 1) / (tile_m);
     dim3 gridDims(gridDim_x, gridDim_y);
 
-    // constexpr int smemSize = tile_m * tile_k + tile_ny* tile_k;
+    // 常量相关的计算全部放在接口层并通过模板传入, kernel 只做最核心的运算
     constexpr int blockDim_y_a = numThreadsPerBlock / blockDim_x_a;
     constexpr int blockDim_y_b = numThreadsPerBlock / blockDim_x_b;
     constexpr int blockDim_y_c = numThreadsPerBlock / blockDim_x_c;
