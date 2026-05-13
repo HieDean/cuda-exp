@@ -137,22 +137,36 @@ __global__ void gemm_kernel_v5(const float *A, const float *B, float *C,
 
     // 使用 BLOCKDIM_Y_C*BLOCKDIM_X_C 个线程将 BLOCKDIM_Y_C*BLOCKDIM_X_C 个数写入 C
     // 每个线程写入 WORKLOAD_Y * WORKLOAD_X 个数
-    for (int idw_y = 0; idw_y < WORKLOAD_Y; idw_y += 4)
+    // 这里为了通用性, 不能使用向量化
+
+    // for (int idw_y = 0; idw_y < WORKLOAD_Y; idw_y += 4)
+    // {
+    //     int idc_y = tile_y0 + BLOCKDIM_Y_C * idw_y + rewarp_id_y * 4;
+    //     for (int idw_x = 0; idw_x < WORKLOAD_X; idw_x += 4)
+    //     {
+    //         int idc_x = tile_x0 + BLOCKDIM_X_C * idw_x + rewarp_id_x * 4;
+    //         if (idc_y + 3 < m && idc_x + 3 < n)
+    //         {
+    //             FLOAT4(C[idc_y * n + idc_x]) = FLOAT4(workload[idw_y * WORKLOAD_X + idw_x]);
+    //             FLOAT4(C[(idc_y + 1) * n + idc_x]) = FLOAT4(workload[(idw_y + 1) * WORKLOAD_X + idw_x]);
+    //             FLOAT4(C[(idc_y + 2) * n + idc_x]) = FLOAT4(workload[(idw_y + 2) * WORKLOAD_X + idw_x]);
+    //             FLOAT4(C[(idc_y + 3) * n + idc_x]) = FLOAT4(workload[(idw_y + 3) * WORKLOAD_X + idw_x]);
+    //         }
+    //     }
+    // }
+
+    for (int idw_y = 0; idw_y < WORKLOAD_Y; ++idw_y)
     {
-        int idc_y = tile_y0 + BLOCKDIM_Y_C * idw_y + rewarp_id_y * 4;
-        for (int idw_x = 0; idw_x < WORKLOAD_X; idw_x += 4)
+        int idc_y = tile_y0 + (rewarp_id_y << 2) + ((idw_y >> 2) << 2) * BLOCKDIM_Y_C + (idw_y & 3);
+        for (int idw_x = 0; idw_x < WORKLOAD_X; ++idw_x)
         {
-            int idc_x = tile_x0 + BLOCKDIM_X_C * idw_x + rewarp_id_x * 4;
-            if (idc_y + 3 < m && idc_x + 3 < n)
+            int idc_x = tile_x0 + (rewarp_id_x << 2) + ((idw_x >> 2) << 2) * BLOCKDIM_X_C + (idw_x & 3);
+            if (idc_y < m && idc_x < n)
             {
-                FLOAT4(C[idc_y * n + idc_x]) = FLOAT4(workload[idw_y * WORKLOAD_X + idw_x]);
-                FLOAT4(C[(idc_y + 1) * n + idc_x]) = FLOAT4(workload[(idw_y + 1) * WORKLOAD_X + idw_x]);
-                FLOAT4(C[(idc_y + 2) * n + idc_x]) = FLOAT4(workload[(idw_y + 2) * WORKLOAD_X + idw_x]);
-                FLOAT4(C[(idc_y + 3) * n + idc_x]) = FLOAT4(workload[(idw_y + 3) * WORKLOAD_X + idw_x]);
+                C[idc_y * n + idc_x] = workload[idw_y * WORKLOAD_X + idw_x];
             }
         }
     }
-
     return;
 }
 

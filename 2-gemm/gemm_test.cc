@@ -155,6 +155,12 @@ int main(int argc, char **argv)
     // gemm_v5
     helper(gemm_v5, A, B, C, m, n, k, stream, 5, 10, c, "gemm_v5");
 
+    // gemm_v6
+    helper(gemm_v6, A, B, C, m, n, k, stream, 5, 10, c, "gemm_v6");
+
+    // gemm_v7
+    helper(gemm_v7, A, B, C, m, n, k, stream, 5, 10, c, "gemm_v7");
+
     {
         // cublasSgemm
         cublasHandle_t handle;

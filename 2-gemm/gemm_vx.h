@@ -18,3 +18,9 @@ int gemm_v4(const float *A, const float *B, float *C,
 
 int gemm_v5(const float *A, const float *B, float *C,
             int m, int n, int k, cudaStream_t stream);
+
+int gemm_v6(const float *A, const float *B, float *C,
+            int m, int n, int k, cudaStream_t stream);
+
+int gemm_v7(const float *A, const float *B, float *C,
+            int m, int n, int k, cudaStream_t stream);
