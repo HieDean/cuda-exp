@@ -10,8 +10,10 @@ template <int TILE_M = 128, int TILE_N = 128, int TILE_K = 8,
           int WARPDIM_X = 8, int WARPDIM_Y = 4,
           int NUM_WARP_X = 2, int NUM_WARP_Y = 4,
           int BLOCKDIM = 256, int WARP_SIZE = 32>
-__global__ void gemm_kernel_v7(const float *A, const float *B, float *C,
-                               const int m, const int n, const int k)
+__global__
+    // __launch_bounds__(256, 0) // 256线程, 期望每个SM至少2个块
+    void gemm_kernel_v7(const float *A, const float *B, float *C,
+                        const int m, const int n, const int k)
 {
     int tile_y0 = blockIdx.y * TILE_M;
     int tile_x0 = blockIdx.x * TILE_N;
