@@ -169,7 +169,7 @@ int main(int argc, char **argv)
         cublasHandle_t handle;
         cublasCreate(&handle);
         cublasSetStream(handle, stream);
-        float alpha = 1.0, beta = 0.0f;
+        float alpha = 1.0f, beta = 0.0f;
         checkCudaErrors(cudaMemset(C, 0, c.size() * sizeof(float)));
 
         // first time, only for correctness check
