@@ -1,3 +1,8 @@
+### Dependencies
+```
+apt-get install libspdlog-dev
+```
+
 ### How to build?
 ```
 mkdir build && cd build

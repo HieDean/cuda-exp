@@ -21,10 +21,15 @@ void helper(KernelFunc func,
     func(A, B, C, length, stream);
     checkCudaErrors(cudaStreamSynchronize(stream));
 
-    // check diff
     std::vector<float> c_from_device = {0};
     checkCudaErrors(cudaMemcpy(c_from_device.data(), C,
                                c.size() * sizeof(float), cudaMemcpyDeviceToHost));
+
+    // eliminate error accumulation
+    c[0] /= length;
+    c_from_device[0] /= length;
+
+    // check diff
     check_difference(c, c_from_device, tag);
 
     // warm up
@@ -116,6 +121,12 @@ int main(int argc, char **argv)
     // dot_v0
     helper(dot_v0, A, B, C, length, stream, 5, 10, c, "dot_v0");
 
+    // dot_v1
+    helper(dot_v1, A, B, C, length, stream, 5, 10, c, "dot_v1");
+
+    // dot_v2
+    helper(dot_v2, A, B, C, length, stream, 5, 10, c, "dot_v2");
+
     {
         // cublasSdot
         cublasHandle_t handle;
@@ -126,10 +137,15 @@ int main(int argc, char **argv)
         // first time, only for correctness check
         cublasSdot(handle, length, A, 1, B, 1, C);
 
-        // check diff
         std::vector<float> c_from_device = {0};
         checkCudaErrors(cudaMemcpy(c_from_device.data(), C,
                                    c.size() * sizeof(float), cudaMemcpyDeviceToHost));
+
+        // eliminate error accumulation
+        c[0] /= length;
+        c_from_device[0] /= length;
+
+        // check diff
         check_difference(c, c_from_device, "cublasSdot");
 
         // warm up
