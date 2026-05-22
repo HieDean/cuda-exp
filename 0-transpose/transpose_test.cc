@@ -61,8 +61,8 @@ void helper(KernelFunc func,
 
 int main(int argc, char **argv)
 {
-    int m = 1024;
-    int n = 512;
+    int m = 4096;
+    int n = 4096;
     if (argc == 3)
     {
         m = std::stoi(argv[1]);
@@ -116,6 +116,9 @@ int main(int argc, char **argv)
 
     // transpose_v0
     helper(transpose_v0, A, B, m, n, stream, 5, 10, b, "transpose_v0");
+
+    // transpose_v1
+    helper(transpose_v1, A, B, m, n, stream, 5, 10, b, "transpose_v1");
 
     {
         // cublasSgemm
