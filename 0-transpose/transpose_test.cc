@@ -120,6 +120,9 @@ int main(int argc, char **argv)
     // transpose_v1
     helper(transpose_v1, A, B, m, n, stream, 5, 10, b, "transpose_v1");
 
+    // transpose_v2
+    helper(transpose_v2, A, B, m, n, stream, 5, 10, b, "transpose_v2");
+
     {
         // cublasSgemm
         cublasHandle_t handle;

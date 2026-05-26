@@ -5,7 +5,6 @@ __global__ void transpose_kernel_v1(const float *A, float *B, int m, int n)
 {
     int y0 = blockIdx.y * TILE_Y;
     int x0 = blockIdx.x * TILE_X;
-
     
     for (int rr = 0; rr < WORKLOAD_Y; ++rr) {
         int yy = y0 + rr * blockDim.y + threadIdx.y;
