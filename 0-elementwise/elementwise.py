@@ -31,7 +31,6 @@ def elementwise_kernel_v0(a_ptr, b_ptr, c_ptr, m, n,
     # Write back to DRAM.
     tl.store(c_ptr + xx * n + yy, c, mask=mask)
 
-
 def elementwise_v0(a: torch.Tensor, b: torch.Tensor):
     ###  Preallocate the output.
     c = torch.empty_like(a)
@@ -55,14 +54,41 @@ def elementwise_v0(a: torch.Tensor, b: torch.Tensor):
     ### 后续访问 c 时会隐式同步, 但如何测量性能就需要使用`torch.cuda.synchronize()`显式同步
     return c
 
+
+@triton.jit
+def elementwise_kernel_v1(a_ptr, b_ptr, c_ptr, num_elements, blockSize: tl.constexpr):
+    pid = tl.program_id(axis=0)
+
+    x0 = pid * blockSize
+    xx = x0 + tl.arange(0, blockSize)
+
+    mask = xx < num_elements
+
+    a = tl.load(a_ptr + xx, mask=mask)
+    b = tl.load(b_ptr + xx, mask=mask)
+    c = a * b
+
+    tl.store(c_ptr + xx, c, mask=mask)
+
+def elementwise_v1(a: torch.Tensor, b: torch.Tensor):
+    c = torch.empty_like(a)
+
+    blockSize = 1024
+    num_elements = c.numel()
+    gridSize = (triton.cdiv(num_elements, blockSize), )
+
+    elementwise_kernel_v1[gridSize](a, b, c, num_elements, blockSize=blockSize)
+
+    return c
+
 @triton.testing.perf_report(
     triton.testing.Benchmark(
         x_names=['size'],  # Argument names to use as an x-axis for the plot.
         x_vals=[2**i for i in range(8, 14, 1)],  # Different possible values for `x_name`.
         x_log=True,  # x axis is logarithmic.
         line_arg='provider',  # Argument name whose value corresponds to a different line in the plot.
-        line_vals=['triton', 'torch'],  # Possible values for `line_arg`.
-        line_names=['Triton', 'Torch'],  # Label name for the lines.
+        line_vals=['torch', 'v0', 'v1'],  # Possible values for `line_arg`.
+        line_names=['Torch', 'v0', 'v1'],  # Label name for the lines.
         ylabel='GB/s',  # Label name for the y-axis.
         plot_name='elementwise-performance',  # Name for the plot. Used also as a file name for saving the plot.
         args={},  # Values for function arguments not in `x_names` and `y_name`.
@@ -78,8 +104,10 @@ def benchmark(size, provider):
 
     if provider == 'torch':
         ms = triton.testing.do_bench(lambda: a * b)
-    if provider == 'triton':
+    if provider == 'v0':
         ms = triton.testing.do_bench(lambda: elementwise_v0(a, b))
+    if provider == 'v1':
+        ms = triton.testing.do_bench(lambda: elementwise_v1(a, b))
 
     gbps = lambda ms: 3 * a.numel() * a.element_size() * 1e-9 / (ms * 1e-3)
     return gbps(ms)
@@ -87,10 +115,11 @@ def benchmark(size, provider):
 def main(): 
     '''
     这里还有一些疑问:
-    * benchmark 测试显示 triton 的性能比 torch 差很多, 可以理解用 2D 的形式去
+    * benchmark 测试显示 v0 的性能比 torch 差很多, 可以理解用 2D 的形式去
       处理 elementwise 算子确实不是一种好的方式, 用 1D 的形式应该会更高效;
     * 为什么 blockSize 设置为 32*32 会比 16*16 性能好很多?
     * triton kernel 的底层调度策略目前是未知的, 我们对于 kernel 的行为做不到像 cuda kernel 那样细粒度的控制;
+    * 无法像 cuda kernel 那样细粒度的控制其实是 triton 的优点, 因为用户不需要关系复杂的底层逻辑了;
 
     reference: https://triton-lang.org/main/getting-started/tutorials/01-vector-add.html
     '''
@@ -103,12 +132,16 @@ def main():
     b = torch.rand(shape, device=device, dtype=dtype)
 
     c_torch = a * b
-    c_triton = elementwise_v0(a, b)
 
+    c_v0 = elementwise_v0(a, b)
     ### check correctness
-    ### 这里访问 c_triton 时会隐式同步, 但如何测量性能就需要使用`torch.cuda.synchronize()`显示同步
-    print(f'The maximum difference between torch and triton is '
-          f'{torch.max(torch.abs(c_torch - c_triton))}')
+    ### 这里访问 c_v0 时会隐式同步, 但如何测量性能就需要使用`torch.cuda.synchronize()`显示同步
+    print(f'The maximum difference between torch and v0 is '
+          f'{torch.max(torch.abs(c_torch - c_v0))}')
+    
+    c_v1 = elementwise_v1(a, b)
+    print(f'The maximum difference between torch and v1 is '
+          f'{torch.max(torch.abs(c_torch - c_v1))}')
 
     benchmark.run(print_data=True)
 
