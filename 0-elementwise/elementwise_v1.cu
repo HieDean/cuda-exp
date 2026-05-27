@@ -32,6 +32,7 @@ int elementwise_v1(const float *A, const float *B, float *C, int m, int n, cudaS
      * v1 增加以下特性:
      * 1. 单个线程处理多个元素;
      * 2. 向量化访存, 但向量化访存会导致 kernel 失去通用性, 这里不会做实现;
+     * 另外这里是使用 2D 的形式去处理, 但其实 elementwise 算子用 1D 的形式去处理更方便
      */
     constexpr int blockDimY = 16;
     constexpr int blockDimX = 16;
