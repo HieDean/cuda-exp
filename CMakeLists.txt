@@ -19,6 +19,7 @@ list(APPEND CUDA_ARCHS 100-real 100-virtual 120-real 120-virtual) # Blackwell=10
 set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCHS}")
 
 add_subdirectory(common)
-add_subdirectory(0-transpose)
-add_subdirectory(1-dot)
-add_subdirectory(2-gemm)
+add_subdirectory(0-elementwise)
+add_subdirectory(1-transpose)
+add_subdirectory(2-dot)
+add_subdirectory(3-gemm)
