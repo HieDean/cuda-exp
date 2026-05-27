@@ -23,7 +23,8 @@ int transpose_v1(const float *A, float *B, int m, int n, cudaStream_t stream)
 {
     /**
      * v0 的问题:
-     * 1. 写入 B 矩阵的时候, 一个 warp 访问的全局内存是不连续的, 这会产生多个内存事务;
+     * 1. 写入 B 矩阵的时候, 一个 warp 写入 32 个 float 产生了 8 个 memory transactions,
+     *    仍然存在访存不合并现象;
      * 2. 一个线程只负责一个 float 线程的负载太低;
      */
     constexpr int blockDimY = 32;
