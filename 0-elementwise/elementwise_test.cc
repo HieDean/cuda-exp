@@ -118,6 +118,9 @@ int main(int argc, char **argv)
     // elementwise_v0
     helper(elementwise_v0, A, B, C, m, n, stream, 5, 10, c, "elementwise_v0");
 
+    // elementwise_v1
+    helper(elementwise_v1, A, B, C, m, n, stream, 5, 10, c, "elementwise_v1");
+
     // free
     cudaFree(A);
     cudaFree(B);
