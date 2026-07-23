@@ -27,7 +27,7 @@ int check_difference(const std::vector<float> &a, std::vector<float> &b, const s
     std::vector<std::pair<int, std::vector<float>>> diffs;
     for (int ii = 0; ii < a.size(); ++ii)
     {
-        if (std::abs(a[ii] - b[ii]) > 1e-3)
+        if (std::abs(a[ii] - b[ii]) > 1e-5)
         {
             count++;
             diffs.push_back(std::pair<int, std::vector<float>>(ii, {a[ii], b[ii]}));
