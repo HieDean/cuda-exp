@@ -10,19 +10,19 @@
 #include "utils.h"
 #include "softmax_vx.h"
 
-using KernelFunc = int (*)(const float *, float *, int, cudaStream_t);
+using KernelFunc = int (*)(const float *, float *, int, int, cudaStream_t);
 
 void helper(KernelFunc func,
-            const float *A, float *B, int n, cudaStream_t stream,
+            const float *A, float *B, int bs, int num, cudaStream_t stream,
             int warmup, int run, std::vector<float> &b, std::string tag)
 {
     // first time, only run for correctness check
-    func(A, B, n, stream);
+    func(A, B, bs, num, stream);
     checkCudaErrors(cudaStreamSynchronize(stream));
 
-    std::vector<float> b_from_device(n);
+    std::vector<float> b_from_device(bs * num);
     checkCudaErrors(cudaMemcpy(b_from_device.data(), B,
-                               n * sizeof(float), cudaMemcpyDeviceToHost));
+                               bs * num * sizeof(float), cudaMemcpyDeviceToHost));
 
     // check diff
     check_difference(b, b_from_device, tag);
@@ -30,7 +30,7 @@ void helper(KernelFunc func,
     // warm up
     for (int ii = 0; ii < warmup; ++ii)
     {
-        func(A, B, n, stream);
+        func(A, B, bs, num, stream);
     }
     checkCudaErrors(cudaStreamSynchronize(stream));
 
@@ -44,7 +44,7 @@ void helper(KernelFunc func,
     cudaEventRecord(start_gpu, stream);
     for (int ii = 0; ii < run; ++ii)
     {
-        func(A, B, n, stream);
+        func(A, B, bs, num, stream);
     }
     cudaEventRecord(stop_gpu, stream);
     cudaEventSynchronize(stop_gpu);
@@ -61,10 +61,13 @@ void helper(KernelFunc func,
 
 int main(int argc, char **argv)
 {
-    int n = 4096;
-    if (argc >= 2)
+    int bs = 256;
+    int num = 4096;
+
+    if (argc >= 3)
     {
-        n = std::stoi(argv[1]);
+        bs = std::stoi(argv[1]);
+        num = std::stoi(argv[2]);
     }
 
     // init random engine
@@ -74,30 +77,28 @@ int main(int argc, char **argv)
 
     /* HOST PART */
     // init host mat
-    std::vector<float> a(n), b(n);
-    for (int ii = 0; ii < n; ++ii)
+    std::vector<float> a(bs * num), b(bs * num);
+    for (int ii = 0; ii < bs * num; ++ii)
     {
         a[ii] = uniform_dist(random_engine);
     }
 
     // host softmax
     std::chrono::steady_clock::time_point start_cpu = std::chrono::steady_clock::now();
-    float sum = 0.0f;
-    float max = -INFINITY;
-    for (int ii = 0; ii < n; ++ii)
+    for (int ii = 0; ii < bs; ++ii)
     {
-        max = std::max(max, a[ii]);
-    }
-    printf("max = %f\n", max);
-    for (int ii = 0; ii < n; ++ii)
-    {
-        b[ii] = std::exp(a[ii] - max);
-        sum += b[ii];
-    }
-    printf("sum = %f\n", sum);
-    for (int ii = 0; ii < n; ++ii)
-    {
-        b[ii] = b[ii] / sum;
+        float sum = 0.0f;
+        float max = -INFINITY;
+        for (int jj = 0; jj < num; ++jj)
+        {
+            float _max = fmaxf(max, a[ii * num + jj]);
+            sum = sum * expf(max - _max) + expf(a[ii * num + jj] - _max);
+            max = _max;
+        }
+        for (int jj = 0; jj < num; ++jj)
+        {
+            b[ii * num + jj] = expf(a[ii * num + jj] - max) / sum;
+        }
     }
     std::chrono::steady_clock::time_point end_cpu = std::chrono::steady_clock::now();
     spdlog::info("host transpose cost: {}us",
@@ -110,17 +111,17 @@ int main(int argc, char **argv)
 
     // init device mat in global memory
     float *A, *B;
-    checkCudaErrors(cudaMalloc(reinterpret_cast<void **>(&A), n * sizeof(float)));
+    checkCudaErrors(cudaMalloc(reinterpret_cast<void **>(&A), bs * num * sizeof(float)));
     checkCudaErrors(cudaMemcpyAsync(A, a.data(), a.size() * sizeof(float),
                                     cudaMemcpyHostToDevice, stream));
 
-    checkCudaErrors(cudaMalloc(reinterpret_cast<void **>(&B), n * sizeof(float)));
+    checkCudaErrors(cudaMalloc(reinterpret_cast<void **>(&B), bs * num * sizeof(float)));
 
     // wait for stream
     checkCudaErrors(cudaStreamSynchronize(stream));
 
     // softmax_v0
-    helper(softmax_v0, A, B, n, stream, 5, 10, b, "softmax_v0");
+    helper(softmax_v0, A, B, bs, num, stream, 5, 10, b, "softmax_v0");
 
     {
         // // cublasSgemm
