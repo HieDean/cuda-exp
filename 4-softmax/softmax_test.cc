@@ -101,7 +101,7 @@ int main(int argc, char **argv)
         }
     }
     std::chrono::steady_clock::time_point end_cpu = std::chrono::steady_clock::now();
-    spdlog::info("host transpose cost: {}us",
+    spdlog::info("host softmax cost: {}us",
                  std::chrono::duration_cast<std::chrono::microseconds>(end_cpu - start_cpu).count());
 
     /* DEVICE PART */
