@@ -123,6 +123,9 @@ int main(int argc, char **argv)
     // softmax_v0
     helper(softmax_v0, A, B, bs, num, stream, 5, 10, b, "softmax_v0");
 
+    // softmax_v1
+    helper(softmax_v1, A, B, bs, num, stream, 5, 10, b, "softmax_v1");
+
     {
         // // cublasSgemm
         // cublasHandle_t handle;
