@@ -5,7 +5,7 @@
 #include <chrono>
 
 #include <cuda_runtime.h>
-#include <cublas_v2.h>
+#include <cudnn.h>
 
 #include "utils.h"
 #include "softmax_vx.h"
@@ -127,63 +127,82 @@ int main(int argc, char **argv)
     helper(softmax_v1, A, B, bs, num, stream, 5, 10, b, "softmax_v1");
 
     {
-        // // cublasSgemm
-        // cublasHandle_t handle;
-        // cublasCreate(&handle);
-        // cublasSetStream(handle, stream);
-        // float alpha = 1.0f, beta = 0.0f;
+        // 初始化 cuDNN 句柄
+        cudnnHandle_t handle;
+        cudnnCreate(&handle);
 
-        // // first time, only for correctness check
-        // cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N,
-        //             m, n,
-        //             &alpha, A, n,
-        //             &beta, NULL, m,
-        //             B, m);
+        // 创建张量描述符
+        cudnnTensorDescriptor_t srcDesc, dstDesc;
+        cudnnCreateTensorDescriptor(&srcDesc);
+        cudnnCreateTensorDescriptor(&dstDesc);
 
-        // // check diff
-        // std::vector<float> b_from_device(m * n);
-        // checkCudaErrors(cudaMemcpy(b_from_device.data(), B,
-        //                            m * n * sizeof(float), cudaMemcpyDeviceToHost));
-        // check_difference(b, b_from_device, "cublasSgemm");
+        // 假设是 NCHW 格式的 4D 张量 (N, C, H, W)
+        int n = bs, c = num, h = 1, w = 1;
+        cudnnSetTensor4dDescriptor(srcDesc,
+                                   /*format=*/CUDNN_TENSOR_NCHW,
+                                   /*dataType=*/CUDNN_DATA_FLOAT, n, c, h, w);
+        // 通常输入和输出的描述符可以相同
+        cudnnSetTensor4dDescriptor(dstDesc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, n, c, h, w);
 
-        // // warm up
-        // for (int ii = 0; ii < 5; ++ii)
-        // {
-        //     cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N,
-        //                 m, n,
-        //                 &alpha, A, n,
-        //                 &beta, NULL, m,
-        //                 B, m);
-        // }
+        // 调用核心 API 执行 Softmax
+        float alpha = 1.0f, beta = 0.0f;
+        cudnnSoftmaxForward(handle,
+                            CUDNN_SOFTMAX_ACCURATE,     // 算法：推荐使用数值稳定版本
+                            CUDNN_SOFTMAX_MODE_CHANNEL, // 模式：在通道维度上计算
+                            &alpha,                     // 缩放因子
+                            srcDesc, A,
+                            &beta, // 累加因子
+                            dstDesc, B);
 
-        // // create event
-        // cudaEvent_t start_gpu, stop_gpu;
-        // cudaEventCreate(&start_gpu);
-        // cudaEventCreate(&stop_gpu);
-        // float milliseconds = 0;
+        // check diff
+        std::vector<float> b_from_device(bs * num);
+        checkCudaErrors(cudaMemcpy(b_from_device.data(), B,
+                                   bs * num * sizeof(float), cudaMemcpyDeviceToHost));
+        check_difference(b, b_from_device, "cudnnSoftmaxForward");
 
-        // // cublasSgemm
-        // cudaEventRecord(start_gpu, stream);
-        // for (int ii = 0; ii < 10; ++ii)
-        // {
-        //     cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N,
-        //                 m, n,
-        //                 &alpha, A, n,
-        //                 &beta, NULL, m,
-        //                 B, m);
-        // }
-        // cudaEventRecord(stop_gpu, stream);
-        // cudaEventSynchronize(stop_gpu);
-        // checkCudaErrors(cudaGetLastError());
+        // warm up
+        for (int ii = 0; ii < 5; ++ii)
+        {
+            cudnnSoftmaxForward(handle,
+                                CUDNN_SOFTMAX_ACCURATE,
+                                CUDNN_SOFTMAX_MODE_CHANNEL,
+                                &alpha,
+                                srcDesc, A,
+                                &beta,
+                                dstDesc, B);
+        }
 
-        // // get cost
-        // cudaEventElapsedTime(&milliseconds, start_gpu, stop_gpu);
-        // spdlog::info("cublasSgemm cost: {}us",
-        //              static_cast<int64_t>(milliseconds * 1000.0));
+        // create event
+        cudaEvent_t start_gpu, stop_gpu;
+        cudaEventCreate(&start_gpu);
+        cudaEventCreate(&stop_gpu);
+        float milliseconds = 0;
 
-        // cublasDestroy(handle);
-        // cudaEventDestroy(start_gpu);
-        // cudaEventDestroy(stop_gpu);
+        // cudnnSoftmaxForward
+        cudaEventRecord(start_gpu, stream);
+        for (int ii = 0; ii < 10; ++ii)
+        {
+            cudnnSoftmaxForward(handle,
+                                CUDNN_SOFTMAX_ACCURATE,
+                                CUDNN_SOFTMAX_MODE_CHANNEL,
+                                &alpha,
+                                srcDesc, A,
+                                &beta,
+                                dstDesc, B);
+        }
+        cudaEventRecord(stop_gpu, stream);
+        cudaEventSynchronize(stop_gpu);
+        checkCudaErrors(cudaGetLastError());
+
+        // get cost
+        cudaEventElapsedTime(&milliseconds, start_gpu, stop_gpu);
+        spdlog::info("cudnnSoftmaxForward cost: {}us",
+                     static_cast<int64_t>(milliseconds * 1000.0));
+
+        // 清理资源
+        cudnnDestroyTensorDescriptor(srcDesc);
+        cudnnDestroyTensorDescriptor(dstDesc);
+        cudnnDestroy(handle);
     }
 
     // free
