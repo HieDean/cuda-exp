@@ -328,14 +328,14 @@ int gemm_v7(const float *A, const float *B, float *C,
             int m, int n, int k, cudaStream_t stream)
 {
     // gemm_v7 double buffer
-    constexpr int warp_size = 32;
-    constexpr int tile_m = 128;
-    constexpr int tile_n = 128;
-    constexpr int tile_k = 8;
-    constexpr int blockDim_x_a = 8;
-    constexpr int blockDim_x_b = 32;
-    constexpr int blockDim_x_c = 16;
-    constexpr int warpDim_x = 8;
+    [[maybe_unused]] constexpr int warp_size = 32;
+    [[maybe_unused]] constexpr int tile_m = 128;
+    [[maybe_unused]] constexpr int tile_n = 128;
+    [[maybe_unused]] constexpr int tile_k = 8;
+    [[maybe_unused]] constexpr int blockDim_x_a = 8;
+    [[maybe_unused]] constexpr int blockDim_x_b = 32;
+    [[maybe_unused]] constexpr int blockDim_x_c = 16;
+    [[maybe_unused]] constexpr int warpDim_x = 8;
 
     constexpr int numThreadsPerBlock = 256;
     dim3 blockDims(numThreadsPerBlock);
@@ -345,16 +345,16 @@ int gemm_v7(const float *A, const float *B, float *C,
     dim3 gridDims(gridDim_x, gridDim_y);
 
     // constexpr int smemSize = tile_m * tile_k + tile_ny* tile_k;
-    constexpr int blockDim_y_a = numThreadsPerBlock / blockDim_x_a;
-    constexpr int blockDim_y_b = numThreadsPerBlock / blockDim_x_b;
-    constexpr int blockDim_y_c = numThreadsPerBlock / blockDim_x_c;
-    constexpr int warpDim_y = warp_size / warpDim_x;
+    [[maybe_unused]] constexpr int blockDim_y_a = numThreadsPerBlock / blockDim_x_a;
+    [[maybe_unused]] constexpr int blockDim_y_b = numThreadsPerBlock / blockDim_x_b;
+    [[maybe_unused]] constexpr int blockDim_y_c = numThreadsPerBlock / blockDim_x_c;
+    [[maybe_unused]] constexpr int warpDim_y = warp_size / warpDim_x;
 
-    constexpr int workload_x = tile_n / blockDim_x_c;
-    constexpr int workload_y = tile_m / blockDim_y_c;
+    [[maybe_unused]] constexpr int workload_x = tile_n / blockDim_x_c;
+    [[maybe_unused]] constexpr int workload_y = tile_m / blockDim_y_c;
 
-    constexpr int num_warp_x = blockDim_x_c / warpDim_x;
-    constexpr int num_warp_y = blockDim_y_c / warpDim_y;
+    [[maybe_unused]] constexpr int num_warp_x = blockDim_x_c / warpDim_x;
+    [[maybe_unused]] constexpr int num_warp_y = blockDim_y_c / warpDim_y;
 
     // gemm_kernel_v6<tile_m, tile_n, tile_k,
     //                blockDim_x_a, blockDim_y_a,
@@ -374,14 +374,14 @@ int gemm_v7_(const float *A, const float *B, float *C,
              int m, int n, int k, cudaStream_t stream)
 {
     // gemm_v7 double buffer
-    constexpr int warp_size = 32;
-    constexpr int tile_m = 128;
-    constexpr int tile_n = 128;
-    constexpr int tile_k = 8;
-    constexpr int blockDim_x_a = 8;
-    constexpr int blockDim_x_b = 32;
-    constexpr int blockDim_x_c = 16;
-    constexpr int warpDim_x = 8;
+    [[maybe_unused]] constexpr int warp_size = 32;
+    [[maybe_unused]] constexpr int tile_m = 128;
+    [[maybe_unused]] constexpr int tile_n = 128;
+    [[maybe_unused]] constexpr int tile_k = 8;
+    [[maybe_unused]] constexpr int blockDim_x_a = 8;
+    [[maybe_unused]] constexpr int blockDim_x_b = 32;
+    [[maybe_unused]] constexpr int blockDim_x_c = 16;
+    [[maybe_unused]] constexpr int warpDim_x = 8;
 
     constexpr int numThreadsPerBlock = 256;
     dim3 blockDims(numThreadsPerBlock);
@@ -391,16 +391,16 @@ int gemm_v7_(const float *A, const float *B, float *C,
     dim3 gridDims(gridDim_x, gridDim_y);
 
     // constexpr int smemSize = tile_m * tile_k + tile_ny* tile_k;
-    constexpr int blockDim_y_a = numThreadsPerBlock / blockDim_x_a;
-    constexpr int blockDim_y_b = numThreadsPerBlock / blockDim_x_b;
-    constexpr int blockDim_y_c = numThreadsPerBlock / blockDim_x_c;
-    constexpr int warpDim_y = warp_size / warpDim_x;
+    [[maybe_unused]] constexpr int blockDim_y_a = numThreadsPerBlock / blockDim_x_a;
+    [[maybe_unused]] constexpr int blockDim_y_b = numThreadsPerBlock / blockDim_x_b;
+    [[maybe_unused]] constexpr int blockDim_y_c = numThreadsPerBlock / blockDim_x_c;
+    [[maybe_unused]] constexpr int warpDim_y = warp_size / warpDim_x;
 
-    constexpr int workload_x = tile_n / blockDim_x_c;
-    constexpr int workload_y = tile_m / blockDim_y_c;
+    [[maybe_unused]] constexpr int workload_x = tile_n / blockDim_x_c;
+    [[maybe_unused]] constexpr int workload_y = tile_m / blockDim_y_c;
 
-    constexpr int num_warp_x = blockDim_x_c / warpDim_x;
-    constexpr int num_warp_y = blockDim_y_c / warpDim_y;
+    [[maybe_unused]] constexpr int num_warp_x = blockDim_x_c / warpDim_x;
+    [[maybe_unused]] constexpr int num_warp_y = blockDim_y_c / warpDim_y;
 
     doublebufferingGEMM<<<gridDims, blockDims, 0, stream>>>(A, B, C, m, k, n);
     return 0;

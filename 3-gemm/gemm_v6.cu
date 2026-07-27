@@ -136,14 +136,14 @@ int gemm_v6(const float *A, const float *B, float *C,
     // 修改写法的过程中, 几乎把整体代码和参考中的代码完全进行了对齐, 但始终无法达到相同的性能,
     // 最后发现, 如果给 float 类型变量赋值使用 0.0, 性能就会很差, 如果用 0.0f 性能就上来了!!! 坑!!!
     // 参考: https://zhuanlan.zhihu.com/p/1910636263666610461
-    constexpr int warp_size = 32;
-    constexpr int tile_m = 128;
-    constexpr int tile_n = 128;
-    constexpr int tile_k = 8;
-    constexpr int blockDim_x_a = 8;
-    constexpr int blockDim_x_b = 32;
-    constexpr int blockDim_x_c = 16;
-    constexpr int warpDim_x = 8;
+    [[maybe_unused]] constexpr int warp_size = 32;
+    [[maybe_unused]] constexpr int tile_m = 128;
+    [[maybe_unused]] constexpr int tile_n = 128;
+    [[maybe_unused]] constexpr int tile_k = 8;
+    [[maybe_unused]] constexpr int blockDim_x_a = 8;
+    [[maybe_unused]] constexpr int blockDim_x_b = 32;
+    [[maybe_unused]] constexpr int blockDim_x_c = 16;
+    [[maybe_unused]] constexpr int warpDim_x = 8;
 
     constexpr int numThreadsPerBlock = 256;
     dim3 blockDims(numThreadsPerBlock);
@@ -153,16 +153,16 @@ int gemm_v6(const float *A, const float *B, float *C,
     dim3 gridDims(gridDim_x, gridDim_y);
 
     // 常量相关的计算全部放在接口层并通过模板传入, kernel 只做最核心的运算
-    constexpr int blockDim_y_a = numThreadsPerBlock / blockDim_x_a;
-    constexpr int blockDim_y_b = numThreadsPerBlock / blockDim_x_b;
-    constexpr int blockDim_y_c = numThreadsPerBlock / blockDim_x_c;
-    constexpr int warpDim_y = warp_size / warpDim_x;
+    [[maybe_unused]] constexpr int blockDim_y_a = numThreadsPerBlock / blockDim_x_a;
+    [[maybe_unused]] constexpr int blockDim_y_b = numThreadsPerBlock / blockDim_x_b;
+    [[maybe_unused]] constexpr int blockDim_y_c = numThreadsPerBlock / blockDim_x_c;
+    [[maybe_unused]] constexpr int warpDim_y = warp_size / warpDim_x;
 
-    constexpr int workload_x = tile_n / blockDim_x_c;
-    constexpr int workload_y = tile_m / blockDim_y_c;
+    [[maybe_unused]] constexpr int workload_x = tile_n / blockDim_x_c;
+    [[maybe_unused]] constexpr int workload_y = tile_m / blockDim_y_c;
 
-    constexpr int num_warp_x = blockDim_x_c / warpDim_x;
-    constexpr int num_warp_y = blockDim_y_c / warpDim_y;
+    [[maybe_unused]] constexpr int num_warp_x = blockDim_x_c / warpDim_x;
+    [[maybe_unused]] constexpr int num_warp_y = blockDim_y_c / warpDim_y;
 
     // gemm_kernel_v6<tile_m, tile_n, tile_k,
     //                blockDim_x_a, blockDim_y_a,
