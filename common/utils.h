@@ -43,3 +43,60 @@ int check_difference(const std::vector<float> &a, std::vector<float> &b, const s
     }
     return 0;
 }
+
+struct Statistics
+{
+    float min = 0.0;
+    float max = 0.0;
+    float average = 0.0;
+    float median = 0.0;
+    float variance = 0.0;
+    float p95 = 0.0;
+};
+
+Statistics get_statistics(std::vector<float> values)
+{
+    if (values.empty())
+    {
+        return {};
+    }
+
+    std::sort(values.begin(), values.end());
+    const size_t n = values.size();
+
+    // 平均值
+    const float sum = std::accumulate(values.begin(), values.end(), 0.0);
+    const float mean = sum / static_cast<float>(n);
+
+    // 中位数
+    float median = 0.0;
+    if (n % 2 == 0)
+    {
+        median = (values[n / 2 - 1] + values[n / 2]) / 2.0;
+    }
+    else
+    {
+        median = values[n / 2];
+    }
+
+    // 方差
+    float variance = 0.0;
+    for (float val : values)
+    {
+        float diff = val - mean;
+        variance += diff * diff;
+    }
+    variance /= static_cast<float>(n);
+
+    // P95
+    const size_t p95_index = static_cast<size_t>(std::ceil(n * 0.95)) - 1;
+
+    return {
+        values.front(),   // min
+        values.back(),    // max
+        mean,             // average
+        median,           // median
+        variance,         // variance
+        values[p95_index] // p95
+    };
+}

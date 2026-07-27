@@ -42,27 +42,40 @@ void helper(KernelFunc func,
     checkCudaErrors(cudaStreamSynchronize(stream));
 
     // create event
-    cudaEvent_t start_gpu, stop_gpu;
-    cudaEventCreate(&start_gpu);
-    cudaEventCreate(&stop_gpu);
-    float milliseconds = 0;
-
-    // run
-    cudaEventRecord(start_gpu, stream);
+    std::vector<cudaEvent_t> starts(run), stops(run);
+    std::vector<float> kernelTimes(run);
     for (int ii = 0; ii < run; ++ii)
     {
-        func(A, B, C, bs, m, n, k, stream);
+        cudaEventCreate(&starts[ii]);
+        cudaEventCreate(&stops[ii]);
     }
-    cudaEventRecord(stop_gpu, stream);
-    cudaEventSynchronize(stop_gpu);
+
+    // run
+    for (int ii = 0; ii < run; ++ii)
+    {
+        cudaEventRecord(starts[ii], stream);
+        func(A, B, C, bs, m, n, k, stream);
+        cudaEventRecord(stops[ii], stream);
+    }
+    cudaDeviceSynchronize();
     checkCudaErrors(cudaGetLastError());
 
     // get cost
-    cudaEventElapsedTime(&milliseconds, start_gpu, stop_gpu);
-    spdlog::info("{} cost: {}us", tag, static_cast<int64_t>(milliseconds / run * 1000.0));
+    for (int ii = 0; ii < run; ++ii)
+    {
+        cudaEventElapsedTime(&kernelTimes[ii], starts[ii], stops[ii]);
+    }
+    auto statistics = get_statistics(kernelTimes);
+    spdlog::info("{} Cost(ms): min: {} med: {} max: {} avg: {} var: {} p95: {}",
+                 tag,
+                 statistics.min, statistics.median, statistics.max,
+                 statistics.average, statistics.variance, statistics.p95);
 
-    cudaEventDestroy(start_gpu);
-    cudaEventDestroy(stop_gpu);
+    for (int ii = 0; ii < run; ++ii)
+    {
+        cudaEventDestroy(starts[ii]);
+        cudaEventDestroy(stops[ii]);
+    }
     return;
 }
 
