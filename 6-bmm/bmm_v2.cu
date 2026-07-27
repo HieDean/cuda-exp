@@ -5,7 +5,7 @@ template <int WARPSIZE, int BLOCKSIZE,
           int BLOCKROWA, int BLOCKCOLA,
           int BLOCKROWB, int BLOCKCOLB,
           int BLOCKROWC, int BLOCKCOLC>
-__global__ void bmm_kernel_v1(const float *A, const float *B, float *C,
+__global__ void bmm_kernel_v2(const float *A, const float *B, float *C,
                               int bs, int m, int n, int k)
 {
     int batchStartA = blockIdx.z * m * k;
@@ -143,7 +143,7 @@ int bmm_v2(const float *A, const float *B, float *C, int bs, int m, int n, int k
 
     const int tileM = 128;
     const int tileN = 128;
-    const int tileK = 8;
+    const int tileK = 16;
     // block 在处理 sharedTileA 时的布局;
     const int blockRowA = blockSize / tileK;
     const int blockColA = tileK;
@@ -162,7 +162,7 @@ int bmm_v2(const float *A, const float *B, float *C, int bs, int m, int n, int k
      * 但同时不能太大导致共享内存和寄存器超限;
      * v1 中的实验显示, tileM = tileN = 128, tileK = 8 的性能较好;
      * ---------------------------------------------------------------------------------
-     * 观察 method 1, method 2 和 method 3, 共享内存的计算访存比为:
+     * 观察 method 2 和 method 3, 共享内存的计算访存比为:
      *   共享内存访问次数: (TILEM / BLOCKROWC) + (TILEN / BLOCKCOLC)
      *   计算次数: (TILEM / BLOCKROWC) * (TILEN / BLOCKCOLC)
      * 想让访存比最大化, 则需要 TILEM / BLOCKROWC 和 TILEN / BLOCKCOLC 相互接近并且尽可能大;
@@ -176,7 +176,7 @@ int bmm_v2(const float *A, const float *B, float *C, int bs, int m, int n, int k
     int gridDim_x = (n + tileN - 1) / tileN;
     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+    bmm_kernel_v2<warpSize, blockSize, tileM, tileN, tileK,
                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
     return 0;

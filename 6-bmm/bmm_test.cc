@@ -152,32 +152,32 @@ int main(int argc, char **argv)
     // bmm_v0
     helper(bmm_v0, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v0");
 
-    // bmm_v1_32_8
-    helper(bmm_v1_32_8, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_32_8");
+    // // bmm_v1_32_8
+    // helper(bmm_v1_32_8, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_32_8");
 
-    // bmm_v1_32_16
-    helper(bmm_v1_32_16, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_32_16");
+    // // bmm_v1_32_16
+    // helper(bmm_v1_32_16, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_32_16");
 
-    // bmm_v1_32_32
-    helper(bmm_v1_32_32, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_32_32");
+    // // bmm_v1_32_32
+    // helper(bmm_v1_32_32, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_32_32");
 
-    // bmm_v1_32_64
-    helper(bmm_v1_32_64, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_32_64");
+    // // bmm_v1_32_64
+    // helper(bmm_v1_32_64, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_32_64");
 
-    // bmm_v1_64_4
-    helper(bmm_v1_64_4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_4");
+    // // bmm_v1_64_4
+    // helper(bmm_v1_64_4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_4");
 
-    // bmm_v1_64_8
-    helper(bmm_v1_64_8, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_8");
+    // // bmm_v1_64_8
+    // helper(bmm_v1_64_8, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_8");
 
-    // bmm_v1_64_16
-    helper(bmm_v1_64_16, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_16");
+    // // bmm_v1_64_16
+    // helper(bmm_v1_64_16, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_16");
 
-    // bmm_v1_64_32
-    helper(bmm_v1_64_32, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_32");
+    // // bmm_v1_64_32
+    // helper(bmm_v1_64_32, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_32");
 
-    // bmm_v1_64_64
-    helper(bmm_v1_64_64, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_64");
+    // // bmm_v1_64_64
+    // helper(bmm_v1_64_64, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_64");
 
     // bmm_v1_128_4
     helper(bmm_v1_128_4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_128_4");
@@ -191,17 +191,29 @@ int main(int argc, char **argv)
     // bmm_v1_128_32
     helper(bmm_v1_128_32, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_128_32");
 
-    // bmm_v1_256_4
-    helper(bmm_v1_256_4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_256_4");
+    // // bmm_v1_256_4
+    // helper(bmm_v1_256_4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_256_4");
 
-    // bmm_v1_256_8
-    helper(bmm_v1_256_8, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_256_8");
+    // // bmm_v1_256_8
+    // helper(bmm_v1_256_8, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_256_8");
 
-    // bmm_v1_256_16
-    helper(bmm_v1_256_16, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_256_16");
+    // // bmm_v1_256_16
+    // helper(bmm_v1_256_16, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_256_16");
 
     // bmm_v2
     helper(bmm_v2, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v2");
+
+    // bmm_v3_2_16
+    helper(bmm_v3_2_16, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v3_2_16");
+
+    // bmm_v3_4_8
+    helper(bmm_v3_4_8, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v3_4_8");
+
+    // bmm_v3_8_4
+    helper(bmm_v3_8_4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v3_8_4");
+
+    // bmm_v3_16_2
+    helper(bmm_v3_16_2, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v3_16_2");
 
     {
         // // cublasSgemm
