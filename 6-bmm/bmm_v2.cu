@@ -143,7 +143,7 @@ int bmm_v2(const float *A, const float *B, float *C, int bs, int m, int n, int k
 
     const int tileM = 128;
     const int tileN = 128;
-    const int tileK = 16;
+    const int tileK = 32;
     // block 在处理 sharedTileA 时的布局;
     const int blockRowA = blockSize / tileK;
     const int blockColA = tileK;

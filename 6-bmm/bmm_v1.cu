@@ -85,194 +85,194 @@ __global__ void bmm_kernel_v1(const float *A, const float *B, float *C,
  * 实测下来, 性能最好的是 bmm_v1_128_8;
  * 但实际上, 在不同的输入 shape 条件下, 性能最优的 kernel 是不一样的, 所以不能一概而论;
  */
-int bmm_v1_32_8(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_32_8(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 32; const int tileN = 32; const int tileK = 8;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 32; const int tileN = 32; const int tileK = 8;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
-int bmm_v1_32_16(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_32_16(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 32; const int tileN = 32; const int tileK = 16;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 32; const int tileN = 32; const int tileK = 16;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
-int bmm_v1_32_32(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_32_32(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 32; const int tileN = 32; const int tileK = 32;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 32; const int tileN = 32; const int tileK = 32;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
-int bmm_v1_32_64(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_32_64(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 32; const int tileN = 32; const int tileK = 64;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 32; const int tileN = 32; const int tileK = 64;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
-int bmm_v1_64_4(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_64_4(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 64; const int tileN = 64; const int tileK = 4;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 64; const int tileN = 64; const int tileK = 4;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
-int bmm_v1_64_8(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_64_8(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 64; const int tileN = 64; const int tileK = 8;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 64; const int tileN = 64; const int tileK = 8;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
-int bmm_v1_64_16(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_64_16(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 64; const int tileN = 64; const int tileK = 16;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 64; const int tileN = 64; const int tileK = 16;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
-int bmm_v1_64_32(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_64_32(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 64; const int tileN = 64; const int tileK = 32;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 64; const int tileN = 64; const int tileK = 32;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
-int bmm_v1_64_64(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_64_64(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 64; const int tileN = 64; const int tileK = 64;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 64; const int tileN = 64; const int tileK = 64;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
 int bmm_v1_128_4(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
 {
@@ -358,65 +358,65 @@ int bmm_v1_128_32(const float *A, const float *B, float *C, int bs, int m, int n
     return 0;
 }
 
-int bmm_v1_256_4(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_256_4(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 256; const int tileN = 256; const int tileK = 4;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 256; const int tileN = 256; const int tileK = 4;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
-int bmm_v1_256_8(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_256_8(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 256; const int tileN = 256; const int tileK = 8;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 256; const int tileN = 256; const int tileK = 8;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }
 
-int bmm_v1_256_16(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
-{
-    const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
+// int bmm_v1_256_16(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+// {
+//     const int warpSize = 32; const int blockSize = 256; dim3 blockDims(blockSize);
 
-    const int tileM = 256; const int tileN = 256; const int tileK = 16;
-    // block 在处理 sharedTileA 时的布局;
-    const int blockRowA = blockSize / tileK; const int blockColA = tileK;
-    // block 在处理 sharedTileB 时的布局;
-    const int blockRowB = blockSize / tileN; const int blockColB = tileN;
-    // block 在处理 TileC 时的布局;
-    const int blockRowC = 16; const int blockColC = 16;
+//     const int tileM = 256; const int tileN = 256; const int tileK = 16;
+//     // block 在处理 sharedTileA 时的布局;
+//     const int blockRowA = blockSize / tileK; const int blockColA = tileK;
+//     // block 在处理 sharedTileB 时的布局;
+//     const int blockRowB = blockSize / tileN; const int blockColB = tileN;
+//     // block 在处理 TileC 时的布局;
+//     const int blockRowC = 16; const int blockColC = 16;
 
-    int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
-    dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
+//     int gridDim_z = bs; int gridDim_y = (m + tileM - 1) / tileM; int gridDim_x = (n + tileN - 1) / tileN;
+//     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
-                  blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
-        <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
-    return 0;
-}
+//     bmm_kernel_v1<warpSize, blockSize, tileM, tileN, tileK,
+//                   blockRowA, blockColA, blockRowB, blockColB, blockRowC, blockColC>
+//         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
+//     return 0;
+// }

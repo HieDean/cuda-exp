@@ -49,7 +49,7 @@ __global__ void bmm_kernel_v4(const float *A, const float *B, float *C,
         {
             for (int jj = 0; jj < TILEK; jj += blockLayoutColA)
             {
-                int logicalColIdA = ((jj + colIdA) + (ii + rowIdA) % 4) / 8;
+                int logicalColIdA = ((jj + colIdA) + (ii + rowIdA) % 4) % 32; // swizzle 重排
                 sharedTileA[ii + rowIdA][logicalColIdA] =
                     row0 + ii + rowIdA < m && kk + jj + colIdA < k ?
                         A[batchStartA + (row0 + ii + rowIdA) * k + (kk + jj + colIdA)] : 0.0f;
@@ -69,7 +69,12 @@ __global__ void bmm_kernel_v4(const float *A, const float *B, float *C,
         for (int tk = 0; tk < TILEK; ++tk)
         {
             for (int ii = 0; ii < TILEM; ii += blockLayoutRowC) {
-                int logical_tk = (tk + (ii + rowIdC) % 4) / 8;
+                int logical_tk = (tk + (ii + rowIdC) % 4) % 32; // swizzle 重排
+                                                                // swizzle 重排的具体方式和 block 布局, warp 布局强关联, 所以没有统一计算方式
+                                                                // 当前 swizzle 重排方式仅适用于:
+                                                                //   tileM = 128, tileN = 128, tileK = 32
+                                                                //   blockLayoutRowC = 16, blockLayoutColC = 16
+                                                                //   warpLayoutRowC = 4, warpLayoutColC = 8
                 regA[ii / blockLayoutRowC] = sharedTileA[ii + rowIdC][logical_tk];
             }
 
@@ -113,7 +118,7 @@ int bmm_v4(const float *A, const float *B, float *C, int bs, int m, int n, int k
 
     const int tileM = 128;
     const int tileN = 128;
-    const int tileK = 16;
+    const int tileK = 32;
     // block 在处理 sharedTileA 时的布局;
     const int blockLayoutRowA = blockSize / tileK;
     const int blockLayoutColA = tileK;

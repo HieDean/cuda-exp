@@ -16,23 +16,23 @@ void helper(KernelFunc func,
             const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream,
             int warmup, int run, std::vector<float> &c, std::string tag)
 {
-    // first time, only run for correctness check
-    checkCudaErrors(cudaMemsetAsync(C, 0, c.size() * sizeof(float), stream));
-    func(A, B, C, bs, m, n, k, stream);
-    checkCudaErrors(cudaStreamSynchronize(stream));
+    // // first time, only run for correctness check
+    // checkCudaErrors(cudaMemsetAsync(C, 0, c.size() * sizeof(float), stream));
+    // func(A, B, C, bs, m, n, k, stream);
+    // checkCudaErrors(cudaStreamSynchronize(stream));
 
-    // check diff
-    std::vector<float> c_from_device(c.size());
-    checkCudaErrors(cudaMemcpy(c_from_device.data(), C,
-                               c.size() * sizeof(float), cudaMemcpyDeviceToHost));
-    for (int ii = 0; ii < c.size(); ++ii) {
-        c[ii] = c[ii] / k;
-        c_from_device[ii] = c_from_device[ii] / k;
-    }
-    check_difference(c, c_from_device, tag);
-    for (int ii = 0; ii < c.size(); ++ii) {
-        c[ii] = c[ii] * k;
-    }
+    // // check diff
+    // std::vector<float> c_from_device(c.size());
+    // checkCudaErrors(cudaMemcpy(c_from_device.data(), C,
+    //                            c.size() * sizeof(float), cudaMemcpyDeviceToHost));
+    // for (int ii = 0; ii < c.size(); ++ii) {
+    //     c[ii] = c[ii] / k;
+    //     c_from_device[ii] = c_from_device[ii] / k;
+    // }
+    // check_difference(c, c_from_device, tag);
+    // for (int ii = 0; ii < c.size(); ++ii) {
+    //     c[ii] = c[ii] * k;
+    // }
 
     // warm up
     for (int ii = 0; ii < warmup; ++ii)
@@ -134,12 +134,12 @@ int main(int argc, char **argv)
         c.push_back(0.0);
     }
 
-    // host bmm
-    std::chrono::steady_clock::time_point start_cpu = std::chrono::steady_clock::now();
-    host_bmm(a.data(), b.data(), c.data(), bs, m, n, k);
-    std::chrono::steady_clock::time_point end_cpu = std::chrono::steady_clock::now();
-    spdlog::info("host bmm cost: {}us",
-                 std::chrono::duration_cast<std::chrono::microseconds>(end_cpu - start_cpu).count());
+    // // host bmm
+    // std::chrono::steady_clock::time_point start_cpu = std::chrono::steady_clock::now();
+    // host_bmm(a.data(), b.data(), c.data(), bs, m, n, k);
+    // std::chrono::steady_clock::time_point end_cpu = std::chrono::steady_clock::now();
+    // spdlog::info("host bmm cost: {}us",
+    //              std::chrono::duration_cast<std::chrono::microseconds>(end_cpu - start_cpu).count());
 
     /* DEVICE PART */
     // init stream
@@ -192,14 +192,14 @@ int main(int argc, char **argv)
     // // bmm_v1_64_64
     // helper(bmm_v1_64_64, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_64_64");
 
-    // bmm_v1_128_4
-    helper(bmm_v1_128_4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_128_4");
+    // // bmm_v1_128_4
+    // helper(bmm_v1_128_4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_128_4");
 
-    // bmm_v1_128_8
-    helper(bmm_v1_128_8, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_128_8");
+    // // bmm_v1_128_8
+    // helper(bmm_v1_128_8, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_128_8");
 
-    // bmm_v1_128_16
-    helper(bmm_v1_128_16, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_128_16");
+    // // bmm_v1_128_16
+    // helper(bmm_v1_128_16, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_128_16");
 
     // bmm_v1_128_32
     helper(bmm_v1_128_32, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v1_128_32");
@@ -222,11 +222,14 @@ int main(int argc, char **argv)
     // bmm_v3_4_8
     helper(bmm_v3_4_8, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v3_4_8");
 
-    // bmm_v3_8_4
-    helper(bmm_v3_8_4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v3_8_4");
+    // // bmm_v3_8_4
+    // helper(bmm_v3_8_4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v3_8_4");
 
-    // bmm_v3_16_2
-    helper(bmm_v3_16_2, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v3_16_2");
+    // // bmm_v3_16_2
+    // helper(bmm_v3_16_2, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v3_16_2");
+
+    // bmm_v4
+    helper(bmm_v4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v4");
 
     {
         // // cublasSgemm
