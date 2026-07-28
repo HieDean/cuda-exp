@@ -1,0 +1,13 @@
+add_executable(attention_test
+    attention_test.cc
+    attention_v0.cu
+)
+target_compile_options(attention_test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
+target_compile_options(attention_test PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas>
+    $<$<COMPILE_LANGUAGE:CUDA>:-v>
+) # 用于显示查看每个 kernel 占用的 register spill barrier 个数
+# target_compile_options(bmm_test PRIVATE
+#     $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas=-maxrregcount=128>
+# ) # 限制每个 kernel 最大可用寄存器个数为 128
+target_link_libraries(attention_test PRIVATE common spdlog fmt cudart cublas)
