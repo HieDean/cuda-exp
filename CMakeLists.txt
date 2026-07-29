@@ -11,12 +11,11 @@ set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
 
 set(CUDA_ARCHS "") # nvidia-smi --query-gpu=compute_cap
-# list(APPEND CUDA_ARCHS 75-real 75-virtual) # Turing=75
-# list(APPEND CUDA_ARCHS 80-real 80-virtual 86-real 86-virtual) # Ampere=80/86
-# list(APPEND CUDA_ARCHS 89-real 89-virtual) # Ada Lovelace=89
-# list(APPEND CUDA_ARCHS 90-real 90-virtual) # Hopper=90
-list(APPEND CUDA_ARCHS 120-real 120-virtual) # Blackwell
-# list(APPEND CUDA_ARCHS 100-real 100-virtual 120-real 120-virtual) # Blackwell=100/120
+list(APPEND CUDA_ARCHS 75-real 75-virtual) # Turing=75
+list(APPEND CUDA_ARCHS 80-real 80-virtual 86-real 86-virtual) # Ampere=80/86
+list(APPEND CUDA_ARCHS 89-real 89-virtual) # Ada Lovelace=89
+list(APPEND CUDA_ARCHS 90-real 90-virtual) # Hopper=90
+list(APPEND CUDA_ARCHS 100-real 100-virtual 120-real 120-virtual) # Blackwell=100/120
 set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCHS}")
 
 add_subdirectory(common)

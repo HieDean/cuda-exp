@@ -231,6 +231,9 @@ int main(int argc, char **argv)
     // bmm_v4
     helper(bmm_v4, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v4");
 
+    // bmm_v5
+    helper(bmm_v5, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v5");
+
     {
         // // cublasSgemm
         // cublasHandle_t handle;

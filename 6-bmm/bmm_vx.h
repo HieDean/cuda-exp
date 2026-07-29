@@ -1,5 +1,4 @@
 #include <cuda_runtime.h>
-#include <cublas_v2.h>
 
 int bmm_v0(const float *A, const float *B, float *C,
            int bs, int m, int n, int k, cudaStream_t stream);
@@ -50,4 +49,7 @@ int bmm_v3_4_8(const float *A, const float *B, float *C,
 //                 int bs, int m, int n, int k, cudaStream_t stream);
 
 int bmm_v4(const float *A, const float *B, float *C,
+           int bs, int m, int n, int k, cudaStream_t stream);
+
+int bmm_v5(const float *A, const float *B, float *C,
            int bs, int m, int n, int k, cudaStream_t stream);
