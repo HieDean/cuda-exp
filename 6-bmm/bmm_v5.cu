@@ -66,19 +66,25 @@ __global__ void bmm_kernel_v5(const float *A, const float *B, float *C,
         {
             for (int jj = 0; jj < TILEK; jj += blockLayoutColA * 4)
             {
+                int logical_rowIdA = 0; // swizzle
                 if (k % 4 == 0 && row0 + ii + rowIdA < m && kk + jj + colIdA * 4 + 3 < k)
                 {
                     float4 tmp = CONST_FLOAT4(A[batchStartA + (row0 + ii + rowIdA) * k + (kk + jj + colIdA * 4)]);
-                    sharedTileA[jj + colIdA * 4 + 0][ii + rowIdA] = tmp.x;
-                    sharedTileA[jj + colIdA * 4 + 1][ii + rowIdA] = tmp.y;
-                    sharedTileA[jj + colIdA * 4 + 2][ii + rowIdA] = tmp.z;
-                    sharedTileA[jj + colIdA * 4 + 3][ii + rowIdA] = tmp.w;
+                    logical_rowIdA = (ii + rowIdA + (jj + colIdA * 4 + 0) % 32 / 4 * 4) % TILEM;
+                    sharedTileA[jj + colIdA * 4 + 0][logical_rowIdA] = tmp.x;
+                    logical_rowIdA = (ii + rowIdA + (jj + colIdA * 4 + 1) % 32 / 4 * 4) % TILEM;
+                    sharedTileA[jj + colIdA * 4 + 1][logical_rowIdA] = tmp.y;
+                    logical_rowIdA = (ii + rowIdA + (jj + colIdA * 4 + 2) % 32 / 4 * 4) % TILEM;
+                    sharedTileA[jj + colIdA * 4 + 2][logical_rowIdA] = tmp.z;
+                    logical_rowIdA = (ii + rowIdA + (jj + colIdA * 4 + 3) % 32 / 4 * 4) % TILEM;
+                    sharedTileA[jj + colIdA * 4 + 3][logical_rowIdA] = tmp.w;
                 }
                 else
                 {
                     for (int fi = 0; fi < 4; ++fi)
                     {
-                        sharedTileA[jj + colIdA * 4 + fi][ii + rowIdA] =
+                        logical_rowIdA = (ii + rowIdA + (jj + colIdA * 4 + fi) % 32 / 4 * 4) % TILEM;
+                        sharedTileA[jj + colIdA * 4 + fi][logical_rowIdA] =
                             row0 + ii + rowIdA < m && kk + jj + colIdA * 4 + fi < k ? A[batchStartA + (row0 + ii + rowIdA) * k + (kk + jj + colIdA * 4 + fi)] : 0.0f;
                     }
                 }
@@ -97,8 +103,10 @@ __global__ void bmm_kernel_v5(const float *A, const float *B, float *C,
                 {
                     for (int fi = 0; fi < 4; ++fi)
                     {
-                        sharedTileB[ii + rowIdB][jj + colIdB * 4 + fi] =
-                            kk + ii + rowIdB < k && col0 + jj + colIdB * 4 + fi < n ? B[batchStartB + (kk + ii + rowIdB) * n + (col0 + jj + colIdB * 4 + fi)] : 0.0f;
+                        // 如果使用 colIdB * 4 + fi, 1*32 的 warp 中, 每个线程的写入地址相差 4 个 word, 会出现 bank conflict;
+                        // 通过将 colIdB * 4 + fi 改为 colIdB + fi * 32, 使得 1*32 的 warp 写入地址连续的 sharedTileB;
+                        sharedTileB[ii + rowIdB][jj + colIdB + fi * 32] =
+                            kk + ii + rowIdB < k && col0 + jj + colIdB + fi * 32 < n ? B[batchStartB + (kk + ii + rowIdB) * n + (col0 + jj + colIdB + fi * 32)] : 0.0f;
                     }
                 }
             }
@@ -109,7 +117,8 @@ __global__ void bmm_kernel_v5(const float *A, const float *B, float *C,
         {
             for (int ii = 0; ii < TILEM; ii += blockLayoutRowC * 4)
             {
-                FLOAT4(regA[ii / blockLayoutRowC]) = FLOAT4(sharedTileA[tk][ii + rowIdC * 4]);
+                int logical_rowIdC = (ii + rowIdC * 4 + tk % 32 / 4 * 4) % TILEM; // swizzle
+                FLOAT4(regA[ii / blockLayoutRowC]) = FLOAT4(sharedTileA[tk][logical_rowIdC]);
             }
 
             for (int ii = 0; ii < TILEN; ii += blockLayoutColC * 4)
