@@ -90,7 +90,8 @@ __global__ void bmm_kernel_v5(const float *A, const float *B, float *C,
             {
                 if (n % 4 == 0 && kk + ii + rowIdB < k && col0 + jj + colIdB * 4 + 3 < n)
                 {
-                    FLOAT4(sharedTileB[ii + rowIdB][jj + colIdB * 4]) = CONST_FLOAT4(B[batchStartB + (kk + ii + rowIdB) * n + (col0 + jj + colIdB * 4)]);
+                    FLOAT4(sharedTileB[ii + rowIdB][jj + colIdB * 4]) =
+                        CONST_FLOAT4(B[batchStartB + (kk + ii + rowIdB) * n + (col0 + jj + colIdB * 4)]);
                 }
                 else
                 {
@@ -106,14 +107,16 @@ __global__ void bmm_kernel_v5(const float *A, const float *B, float *C,
 
         for (int tk = 0; tk < TILEK; ++tk)
         {
-            for (int ii = 0; ii < TILEM; ii += blockLayoutRowC) {
-                regA[ii / blockLayoutRowC] = sharedTileA[tk][ii + rowIdC];
+            for (int ii = 0; ii < TILEM; ii += blockLayoutRowC * 4)
+            {
+                FLOAT4(regA[ii / blockLayoutRowC]) = FLOAT4(sharedTileA[tk][ii + rowIdC * 4]);
             }
 
-            for (int ii = 0; ii < TILEN; ii += blockLayoutColC) {
-                regB[ii / blockLayoutColC] = sharedTileB[tk][ii + colIdC];
+            for (int ii = 0; ii < TILEN; ii += blockLayoutColC * 4)
+            {
+                FLOAT4(regB[ii / blockLayoutColC]) = FLOAT4(sharedTileB[tk][ii + colIdC * 4]);
             }
-            
+
             for (int ii = 0; ii < TILEM; ii += blockLayoutRowC)
             {
                 for (int jj = 0; jj < TILEN; jj += blockLayoutColC)
@@ -126,14 +129,28 @@ __global__ void bmm_kernel_v5(const float *A, const float *B, float *C,
     }
 
     // store
-    for (int ii = 0; ii < TILEM; ii += blockLayoutRowC)
+    for (int ii = 0; ii < TILEM; ii += blockLayoutRowC * 4)
     {
-        for (int jj = 0; jj < TILEN; jj += blockLayoutColC)
+        for (int jj = 0; jj < TILEN; jj += blockLayoutColC * 4)
         {
-            if (row0 + ii + rowIdC < m && col0 + jj + colIdC < n)
+            for (int fi = 0; fi < 4; ++fi)
             {
-                C[batchStartC + (row0 + ii + rowIdC) * n + (col0 + jj + colIdC)] =
-                    regSum[ii / blockLayoutRowC][jj / blockLayoutColC];
+                if (n % 4 == 0 && row0 + ii + rowIdC * 4 + fi < m && col0 + jj + colIdC * 4 + 3 < n)
+                {
+                    FLOAT4(C[batchStartC + (row0 + ii + rowIdC * 4 + fi) * n + (col0 + jj + colIdC * 4)]) =
+                        FLOAT4(regSum[ii / blockLayoutRowC + fi][jj / blockLayoutColC]);
+                }
+                else
+                {
+                    for (int fj = 0; fj < 4; ++fj)
+                    {
+                        if (row0 + ii + rowIdC * 4 + fi < m && col0 + jj + colIdC * 4 + fj < n)
+                        {
+                            C[batchStartC + (row0 + ii + rowIdC * 4 + fi) * n + (col0 + jj + colIdC * 4 + fj)] =
+                                regSum[ii / blockLayoutRowC + fi][jj / blockLayoutColC + fj];
+                        }
+                    }
+                }
             }
         }
     }
