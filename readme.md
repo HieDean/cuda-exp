@@ -67,6 +67,8 @@ ncu \
                                                                        \ # op_ld: load 操作
                                                                        \ # op_st: store 操作
                                                                        \ # .sum: 所有相关硬件单元和采样实例的总和
+    --metrics l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum     \ # data: 统计数据访问
+                                                                       \ # wavefronts: wavefronts
     -f ./xxx
 
 # 分析指令和源码关联

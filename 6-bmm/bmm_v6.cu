@@ -54,10 +54,8 @@ __global__ void bmm_kernel_v5(const float *A, const float *B, float *C,
     int numWarpsColC = blockLayoutColC / warpLayoutColC;
     int warpIdRowC = warpId / numWarpsColC;
     int warpIdColC = warpId % numWarpsColC;
-    // int laneIdRowC = laneId / warpLayoutColC;
-    // int laneIdColC = laneId % warpLayoutColC;
-    int laneIdRowC = laneId / 16 * 2 + laneId % 2; // z-order
-    int laneIdColC = laneId % 16 / 2;              // z-order
+    int laneIdRowC = laneId / warpLayoutColC;
+    int laneIdColC = laneId % warpLayoutColC;
     int rowIdC = warpIdRowC * warpLayoutRowC + laneIdRowC;
     int colIdC = warpIdColC * warpLayoutColC + laneIdColC;
 
