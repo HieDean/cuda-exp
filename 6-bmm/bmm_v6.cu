@@ -207,6 +207,8 @@ __global__ void bmm_kernel_v6(const float *A, const float *B, float *C,
         __syncthreads();
     } // k loop
 
+    int numKTiles = (k + TILEK - 1) / TILEK;
+    int lastBuf = (numKTiles - 1) & 1;
     #pragma unroll
     for (int tk = 0; tk < TILEK; ++tk)
     {
@@ -214,13 +216,13 @@ __global__ void bmm_kernel_v6(const float *A, const float *B, float *C,
         for (int ii = 0; ii < TILEM; ii += blockLayoutRowC << 2)
         {
             int logical_rowIdC = (ii + physical_rowIdC + ((tk & 4) << 2)) & (TILEM - 1); // swizzle
-            FLOAT4(regA[ii / blockLayoutRowC]) = FLOAT4(sharedTileA[1][tk][logical_rowIdC]);
+            FLOAT4(regA[ii / blockLayoutRowC]) = FLOAT4(sharedTileA[lastBuf][tk][logical_rowIdC]);
         }
 
         #pragma unroll
         for (int ii = 0; ii < TILEN; ii += blockLayoutColC << 2)
         {
-            FLOAT4(regB[ii / blockLayoutColC]) = FLOAT4(sharedTileB[1][tk][ii + (colIdC << 2)]);
+            FLOAT4(regB[ii / blockLayoutColC]) = FLOAT4(sharedTileB[lastBuf][tk][ii + (colIdC << 2)]);
         }
 
         #pragma unroll

@@ -69,6 +69,9 @@ ncu \
                                                                        \ # .sum: 所有相关硬件单元和采样实例的总和
     --metrics l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum     \ # data: 统计数据访问
                                                                        \ # wavefronts: wavefronts
+    --metrics sm__warps_active.avg.pct_of_peak_sustained_active        \ # sm__warps_active: SM 上处于 active 状态的 warp 数量
+                                                                       \ # avg: 所有 SM kernel 执行时间取平均值
+                                                                       \ # pct_of_peak_sustained_active: 将平均 active warp 数除以硬件能够支持的峰值 active warp 数，并转换成百分比
     -f ./xxx
 
 # 分析指令和源码关联

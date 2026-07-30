@@ -27,23 +27,23 @@ void helper(KernelFunc func,
             const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream,
             int warmup, int run, std::vector<float> &c, std::string tag)
 {
-    // // first time, only run for correctness check
-    // checkCudaErrors(cudaMemsetAsync(C, 0, c.size() * sizeof(float), stream));
-    // func(A, B, C, bs, m, n, k, stream);
-    // checkCudaErrors(cudaStreamSynchronize(stream));
+    // first time, only run for correctness check
+    checkCudaErrors(cudaMemsetAsync(C, 0, c.size() * sizeof(float), stream));
+    func(A, B, C, bs, m, n, k, stream);
+    checkCudaErrors(cudaStreamSynchronize(stream));
 
-    // // check diff
-    // std::vector<float> c_from_device(c.size());
-    // checkCudaErrors(cudaMemcpy(c_from_device.data(), C,
-    //                            c.size() * sizeof(float), cudaMemcpyDeviceToHost));
-    // for (int ii = 0; ii < c.size(); ++ii) {
-    //     c[ii] = c[ii] / k;
-    //     c_from_device[ii] = c_from_device[ii] / k;
-    // }
-    // check_difference(c, c_from_device, tag);
-    // for (int ii = 0; ii < c.size(); ++ii) {
-    //     c[ii] = c[ii] * k;
-    // }
+    // check diff
+    std::vector<float> c_from_device(c.size());
+    checkCudaErrors(cudaMemcpy(c_from_device.data(), C,
+                               c.size() * sizeof(float), cudaMemcpyDeviceToHost));
+    for (int ii = 0; ii < c.size(); ++ii) {
+        c[ii] = c[ii] / k;
+        c_from_device[ii] = c_from_device[ii] / k;
+    }
+    check_difference(c, c_from_device, tag);
+    for (int ii = 0; ii < c.size(); ++ii) {
+        c[ii] = c[ii] * k;
+    }
 
     // warm up
     for (int ii = 0; ii < warmup; ++ii)
@@ -77,10 +77,15 @@ void helper(KernelFunc func,
         cudaEventElapsedTime(&kernelTimes[ii], starts[ii], stops[ii]);
     }
     auto statistics = get_statistics(kernelTimes);
-    spdlog::info("{} Cost(ms): min: {} med: {} max: {} avg: {} var: {} p95: {}",
+    const double flops = 2.0 * static_cast<double>(bs) * m * n * k;
+    const double median_gflops = flops / (static_cast<double>(statistics.median) * 1.0e6);
+    const double median_tflops = flops / (static_cast<double>(statistics.median) * 1.0e9);
+    spdlog::info("{} Cost(ms): min: {} med: {} max: {} avg: {} var: {} p95: {} "
+                 "Performance: {:.3f} GFLOPS ({:.3f} TFLOPS)",
                  tag,
                  statistics.min, statistics.median, statistics.max,
-                 statistics.average, statistics.variance, statistics.p95);
+                 statistics.average, statistics.variance, statistics.p95,
+                 median_gflops, median_tflops);
 
     for (int ii = 0; ii < run; ++ii)
     {
@@ -117,23 +122,23 @@ void cublas_helper(cublasHandle_t handle,
             label);
     };
 
-    // // Correctness check.
-    // run_cublas(CUBLAS_COMPUTE_32F_PEDANTIC, "cuBLAS FP32");
-    // checkCudaErrors(cudaStreamSynchronize(stream));
+    // Correctness check.
+    run_cublas(CUBLAS_COMPUTE_32F_PEDANTIC, "cuBLAS FP32");
+    checkCudaErrors(cudaStreamSynchronize(stream));
 
-    // std::vector<float> c_from_device(c.size());
-    // checkCudaErrors(cudaMemcpy(c_from_device.data(), C,
-    //                            c.size() * sizeof(float), cudaMemcpyDeviceToHost));
-    // for (size_t ii = 0; ii < c.size(); ++ii)
-    // {
-    //     c[ii] /= k;
-    //     c_from_device[ii] /= k;
-    // }
-    // check_difference(c, c_from_device, "cuBLAS FP32");
-    // for (size_t ii = 0; ii < c.size(); ++ii)
-    // {
-    //     c[ii] *= k;
-    // }
+    std::vector<float> c_from_device(c.size());
+    checkCudaErrors(cudaMemcpy(c_from_device.data(), C,
+                               c.size() * sizeof(float), cudaMemcpyDeviceToHost));
+    for (size_t ii = 0; ii < c.size(); ++ii)
+    {
+        c[ii] /= k;
+        c_from_device[ii] /= k;
+    }
+    check_difference(c, c_from_device, "cuBLAS FP32");
+    for (size_t ii = 0; ii < c.size(); ++ii)
+    {
+        c[ii] *= k;
+    }
 
     auto benchmark_cublas = [&](cublasComputeType_t compute_type, const char *label) {
         for (int ii = 0; ii < warmup; ++ii)
@@ -163,10 +168,15 @@ void cublas_helper(cublasHandle_t handle,
             checkCudaErrors(cudaEventElapsedTime(&kernelTimes[ii], starts[ii], stops[ii]));
         }
         auto statistics = get_statistics(kernelTimes);
-        spdlog::info("{} Cost(ms): min: {} med: {} max: {} avg: {} var: {} p95: {}",
+        const double flops = 2.0 * static_cast<double>(bs) * m * n * k;
+        const double median_gflops = flops / (static_cast<double>(statistics.median) * 1.0e6);
+        const double median_tflops = flops / (static_cast<double>(statistics.median) * 1.0e9);
+        spdlog::info("{} Cost(ms): min: {} med: {} max: {} avg: {} var: {} p95: {} "
+                     "Performance: {:.3f} GFLOPS ({:.3f} TFLOPS)",
                      label,
                      statistics.min, statistics.median, statistics.max,
-                     statistics.average, statistics.variance, statistics.p95);
+                     statistics.average, statistics.variance, statistics.p95,
+                     median_gflops, median_tflops);
 
         for (int ii = 0; ii < run; ++ii)
         {
@@ -234,12 +244,12 @@ int main(int argc, char **argv)
         c.push_back(0.0);
     }
 
-    // // host bmm
-    // std::chrono::steady_clock::time_point start_cpu = std::chrono::steady_clock::now();
-    // host_bmm(a.data(), b.data(), c.data(), bs, m, n, k);
-    // std::chrono::steady_clock::time_point end_cpu = std::chrono::steady_clock::now();
-    // spdlog::info("host bmm cost: {}us",
-    //              std::chrono::duration_cast<std::chrono::microseconds>(end_cpu - start_cpu).count());
+    // host bmm
+    std::chrono::steady_clock::time_point start_cpu = std::chrono::steady_clock::now();
+    host_bmm(a.data(), b.data(), c.data(), bs, m, n, k);
+    std::chrono::steady_clock::time_point end_cpu = std::chrono::steady_clock::now();
+    spdlog::info("host bmm cost: {}us",
+                 std::chrono::duration_cast<std::chrono::microseconds>(end_cpu - start_cpu).count());
 
     /* DEVICE PART */
     // init stream
