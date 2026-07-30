@@ -6,6 +6,7 @@ add_executable(bmm_test
     bmm_v3.cu
     bmm_v4.cu
     bmm_v5.cu
+    bmm_v51.cu
 )
 target_compile_options(bmm_test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
 target_compile_options(bmm_test PRIVATE

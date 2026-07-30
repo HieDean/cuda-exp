@@ -334,6 +334,9 @@ int main(int argc, char **argv)
     // bmm_v5
     helper(bmm_v5, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v5");
 
+    // bmm_v51
+    helper(bmm_v51, A, B, C, bs, m, n, k, stream, 10, 50, c, "bmm_v51");
+
     cublasHandle_t cublas_handle;
     checkCublasStatus(cublasCreate(&cublas_handle), "cublasCreate");
     checkCublasStatus(cublasSetStream(cublas_handle, stream), "cublasSetStream");
