@@ -63,96 +63,185 @@ __global__ void bmm_kernel_v6(const float *A, const float *B, float *C,
     int physical_rowIdC = rowIdC << 2;
     int physical_colIdC = colIdC << 2;
 
+    #pragma unroll
+    for (int ii = 0; ii < TILEM; ii += blockLayoutRowA)
+    {
+        int logical_rowIdA = 0; // swizzle
+        int physical_rowIdA = ii + rowIdA;
+        int physical_colIdA = colIdA << 2;
+        // x + y % 8 / 4 * 16 => x + ((y & 4) << 2)
+        if (k % 4 == 0 && row0 + ii + rowIdA < m && physical_colIdA + 3 < k)
+        {
+            float4 tmp = CONST_FLOAT4(A[batchStartA + (row0 + physical_rowIdA) * k + (physical_colIdA)]);
+            logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 0) & 4) << 2)) & (TILEM - 1);
+            sharedTileA[0][physical_colIdA + 0][logical_rowIdA] = tmp.x;
+            logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 1) & 4) << 2)) & (TILEM - 1);
+            sharedTileA[0][physical_colIdA + 1][logical_rowIdA] = tmp.y;
+            logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 2) & 4) << 2)) & (TILEM - 1);
+            sharedTileA[0][physical_colIdA + 2][logical_rowIdA] = tmp.z;
+            logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 3) & 4) << 2)) & (TILEM - 1);
+            sharedTileA[0][physical_colIdA + 3][logical_rowIdA] = tmp.w;
+        }
+        else
+        {
+            #pragma unroll
+            for (int fi = 0; fi < 4; ++fi)
+            {
+                logical_rowIdA = (physical_rowIdA + (((physical_colIdA + fi) & 4) << 2)) & (TILEM - 1);
+                sharedTileA[0][physical_colIdA + fi][logical_rowIdA] =
+                    row0 + physical_rowIdA < m && physical_colIdA + fi < k ? A[batchStartA + (row0 + physical_rowIdA) * k + (physical_colIdA + fi)] : 0.0f;
+            }
+        }
+    }
+    #pragma unroll
+    for (int ii = 0; ii < TILEK; ii += blockLayoutRowB)
+    {
+        int physical_rowIdB = ii + rowIdB;
+        int physical_colIdB = colIdB << 2;
+        if (n % 4 == 0 && physical_rowIdB < k && col0 + physical_colIdB + 3 < n)
+        {
+            FLOAT4(sharedTileB[0][physical_rowIdB][physical_colIdB]) =
+                CONST_FLOAT4(B[batchStartB + (physical_rowIdB) * n + (col0 + physical_colIdB)]);
+        }
+        else
+        {
+            for (int fi = 0; fi < 4; ++fi)
+            {
+                // 如果使用 physical_colIdB + fi, 1*32 的 warp 中, 每个线程的写入地址相差 4 个 word, 会出现 bank conflict;
+                // 通过将 physical_colIdB + fi 改为 colIdB + fi * 32, 使得 1*32 的 warp 写入地址连续的 sharedTileB;
+                int offset = fi << 5;
+                sharedTileB[0][physical_rowIdB][colIdB + offset] =
+                    physical_rowIdB < k && col0 + colIdB + offset < n ? B[batchStartB + (physical_rowIdB) * n + (col0 + colIdB + offset)] : 0.0f;
+            }
+        }
+    }
+    __syncthreads();
+
     // k loop
-    for (int kk = 0; kk < k + TILEK; kk += TILEK)
+    #pragma unroll
+    for (int kk = TILEK; kk < k; kk += TILEK)
     {
         int bufId0 = (kk / TILEK) % 2;
-        int bufId1 = ((kk + 1) / TILEK) % 2;
-        if (kk < k)
+        int bufId1 = bufId0 ^ 1;
+
+        #pragma unroll
+        for (int tk = 0; tk < TILEK; ++tk)
         {
-            for (int ii = 0; ii < TILEM; ii += blockLayoutRowA)
+            #pragma unroll
+            for (int ii = 0; ii < TILEM; ii += blockLayoutRowC << 2)
             {
-                int logical_rowIdA = 0; // swizzle
-                int physical_rowIdA = ii + rowIdA;
-                int physical_colIdA = colIdA << 2;
-                // x + y % 8 / 4 * 4 => x + (y & 4)
-                if (k % 4 == 0 && row0 + ii + rowIdA < m && kk + physical_colIdA + 3 < k)
-                {
-                    float4 tmp = CONST_FLOAT4(A[batchStartA + (row0 + physical_rowIdA) * k + (kk + physical_colIdA)]);
-                    logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 0) & 4)) & (TILEM - 1);
-                    sharedTileA[bufId0][physical_colIdA + 0][logical_rowIdA] = tmp.x;
-                    logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 1) & 4)) & (TILEM - 1);
-                    sharedTileA[bufId0][physical_colIdA + 1][logical_rowIdA] = tmp.y;
-                    logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 2) & 4)) & (TILEM - 1);
-                    sharedTileA[bufId0][physical_colIdA + 2][logical_rowIdA] = tmp.z;
-                    logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 3) & 4)) & (TILEM - 1);
-                    sharedTileA[bufId0][physical_colIdA + 3][logical_rowIdA] = tmp.w;
-                }
-                else
-                {
-                    for (int fi = 0; fi < 4; ++fi)
-                    {
-                        logical_rowIdA = (physical_rowIdA + ((physical_colIdA + fi) & 4)) & (TILEM - 1);
-                        sharedTileA[bufId0][physical_colIdA + fi][logical_rowIdA] =
-                            row0 + physical_rowIdA < m && kk + physical_colIdA + fi < k ? A[batchStartA + (row0 + physical_rowIdA) * k + (kk + physical_colIdA + fi)] : 0.0f;
-                    }
-                }
+                int logical_rowIdC = (ii + physical_rowIdC + ((tk & 4) << 2)) & (TILEM - 1); // swizzle
+                FLOAT4(regA[ii / blockLayoutRowC]) = FLOAT4(sharedTileA[bufId1][tk][logical_rowIdC]);
             }
-            for (int ii = 0; ii < TILEK; ii += blockLayoutRowB)
+
+            #pragma unroll
+            for (int ii = 0; ii < TILEN; ii += blockLayoutColC << 2)
             {
-                int physical_rowIdB = ii + rowIdB;
-                int physical_colIdB = colIdB << 2;
-                if (n % 4 == 0 && kk + physical_rowIdB < k && col0 + physical_colIdB + 3 < n)
+                FLOAT4(regB[ii / blockLayoutColC]) = FLOAT4(sharedTileB[bufId1][tk][ii + (colIdC << 2)]);
+            }
+
+            #pragma unroll
+            for (int ii = 0; ii < TILEM; ii += blockLayoutRowC)
+            {
+                #pragma unroll
+                for (int jj = 0; jj < TILEN; jj += blockLayoutColC)
                 {
-                    FLOAT4(sharedTileB[bufId0][physical_rowIdB][physical_colIdB]) =
-                        CONST_FLOAT4(B[batchStartB + (kk + physical_rowIdB) * n + (col0 + physical_colIdB)]);
-                }
-                else
-                {
-                    for (int fi = 0; fi < 4; ++fi)
-                    {
-                        // 如果使用 physical_colIdB + fi, 1*32 的 warp 中, 每个线程的写入地址相差 4 个 word, 会出现 bank conflict;
-                        // 通过将 physical_colIdB + fi 改为 colIdB + fi * 32, 使得 1*32 的 warp 写入地址连续的 sharedTileB;
-                        int offset = fi << 5;
-                        sharedTileB[bufId0][physical_rowIdB][colIdB + offset] =
-                            kk + physical_rowIdB < k && col0 + colIdB + offset < n ? B[batchStartB + (kk + physical_rowIdB) * n + (col0 + colIdB + offset)] : 0.0f;
-                    }
+                    regSum[ii / blockLayoutRowC][jj / blockLayoutColC] += regA[ii / blockLayoutRowC] * regB[jj / blockLayoutColC];
                 }
             }
         }
 
-        if (kk > 0)
+        #pragma unroll
+        for (int ii = 0; ii < TILEM; ii += blockLayoutRowA)
         {
-            for (int tk = 0; tk < TILEK; ++tk)
+            int logical_rowIdA = 0; // swizzle
+            int physical_rowIdA = ii + rowIdA;
+            int physical_colIdA = colIdA << 2;
+            // x + y % 8 / 4 * 16 => x + ((y & 4) << 2)
+            if (k % 4 == 0 && row0 + ii + rowIdA < m && kk + physical_colIdA + 3 < k)
             {
-                for (int ii = 0; ii < TILEM; ii += blockLayoutRowC << 2)
+                float4 tmp = CONST_FLOAT4(A[batchStartA + (row0 + physical_rowIdA) * k + (kk + physical_colIdA)]);
+                logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 0) & 4) << 2)) & (TILEM - 1);
+                sharedTileA[bufId0][physical_colIdA + 0][logical_rowIdA] = tmp.x;
+                logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 1) & 4) << 2)) & (TILEM - 1);
+                sharedTileA[bufId0][physical_colIdA + 1][logical_rowIdA] = tmp.y;
+                logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 2) & 4) << 2)) & (TILEM - 1);
+                sharedTileA[bufId0][physical_colIdA + 2][logical_rowIdA] = tmp.z;
+                logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 3) & 4) << 2)) & (TILEM - 1);
+                sharedTileA[bufId0][physical_colIdA + 3][logical_rowIdA] = tmp.w;
+            }
+            else
+            {
+                #pragma unroll
+                for (int fi = 0; fi < 4; ++fi)
                 {
-                    int logical_rowIdC = (ii + physical_rowIdC + (tk & 4)) & (TILEM - 1); // swizzle
-                    FLOAT4(regA[ii / blockLayoutRowC]) = FLOAT4(sharedTileA[bufId1][tk][logical_rowIdC]);
+                    logical_rowIdA = (physical_rowIdA + (((physical_colIdA + fi) & 4) << 2)) & (TILEM - 1);
+                    sharedTileA[bufId0][physical_colIdA + fi][logical_rowIdA] =
+                        row0 + physical_rowIdA < m && kk + physical_colIdA + fi < k ? A[batchStartA + (row0 + physical_rowIdA) * k + (kk + physical_colIdA + fi)] : 0.0f;
                 }
-
-                for (int ii = 0; ii < TILEN; ii += blockLayoutColC << 2)
+            }
+        }
+        #pragma unroll
+        for (int ii = 0; ii < TILEK; ii += blockLayoutRowB)
+        {
+            int physical_rowIdB = ii + rowIdB;
+            int physical_colIdB = colIdB << 2;
+            if (n % 4 == 0 && kk + physical_rowIdB < k && col0 + physical_colIdB + 3 < n)
+            {
+                FLOAT4(sharedTileB[bufId0][physical_rowIdB][physical_colIdB]) =
+                    CONST_FLOAT4(B[batchStartB + (kk + physical_rowIdB) * n + (col0 + physical_colIdB)]);
+            }
+            else
+            {
+                #pragma unroll
+                for (int fi = 0; fi < 4; ++fi)
                 {
-                    FLOAT4(regB[ii / blockLayoutColC]) = FLOAT4(sharedTileB[bufId1][tk][ii + (colIdC << 2)]);
-                }
-
-                for (int ii = 0; ii < TILEM; ii += blockLayoutRowC)
-                {
-                    for (int jj = 0; jj < TILEN; jj += blockLayoutColC)
-                    {
-                        regSum[ii / blockLayoutRowC][jj / blockLayoutColC] += regA[ii / blockLayoutRowC] * regB[jj / blockLayoutColC];
-                    }
+                    // 如果使用 physical_colIdB + fi, 1*32 的 warp 中, 每个线程的写入地址相差 4 个 word, 会出现 bank conflict;
+                    // 通过将 physical_colIdB + fi 改为 colIdB + fi * 32, 使得 1*32 的 warp 写入地址连续的 sharedTileB;
+                    int offset = fi << 5;
+                    sharedTileB[bufId0][physical_rowIdB][colIdB + offset] =
+                        kk + physical_rowIdB < k && col0 + colIdB + offset < n ? B[batchStartB + (kk + physical_rowIdB) * n + (col0 + colIdB + offset)] : 0.0f;
                 }
             }
         }
         __syncthreads();
+    } // k loop
+
+    #pragma unroll
+    for (int tk = 0; tk < TILEK; ++tk)
+    {
+        #pragma unroll
+        for (int ii = 0; ii < TILEM; ii += blockLayoutRowC << 2)
+        {
+            int logical_rowIdC = (ii + physical_rowIdC + ((tk & 4) << 2)) & (TILEM - 1); // swizzle
+            FLOAT4(regA[ii / blockLayoutRowC]) = FLOAT4(sharedTileA[1][tk][logical_rowIdC]);
+        }
+
+        #pragma unroll
+        for (int ii = 0; ii < TILEN; ii += blockLayoutColC << 2)
+        {
+            FLOAT4(regB[ii / blockLayoutColC]) = FLOAT4(sharedTileB[1][tk][ii + (colIdC << 2)]);
+        }
+
+        #pragma unroll
+        for (int ii = 0; ii < TILEM; ii += blockLayoutRowC)
+        {
+            #pragma unroll
+            for (int jj = 0; jj < TILEN; jj += blockLayoutColC)
+            {
+                regSum[ii / blockLayoutRowC][jj / blockLayoutColC] += regA[ii / blockLayoutRowC] * regB[jj / blockLayoutColC];
+            }
+        }
     }
 
     // store
+    #pragma unroll
     for (int ii = 0; ii < TILEM; ii += blockLayoutRowC << 2)
     {
+        #pragma unroll
         for (int jj = 0; jj < TILEN; jj += blockLayoutColC << 2)
         {
+            #pragma unroll
             for (int fi = 0; fi < 4; ++fi)
             {
                 if (n % 4 == 0 && row0 + ii + physical_rowIdC + fi < m && col0 + jj + physical_colIdC + 3 < n)
@@ -162,6 +251,7 @@ __global__ void bmm_kernel_v6(const float *A, const float *B, float *C,
                 }
                 else
                 {
+                    #pragma unroll
                     for (int fj = 0; fj < 4; ++fj)
                     {
                         if (row0 + ii + physical_rowIdC + fi < m && col0 + jj + physical_colIdC + fj < n)

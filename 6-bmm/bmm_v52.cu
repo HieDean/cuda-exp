@@ -71,24 +71,24 @@ __global__ void bmm_kernel_v52(const float *A, const float *B, float *C,
             int logical_rowIdA = 0; // swizzle
             int physical_rowIdA = ii + rowIdA;
             int physical_colIdA = colIdA << 2;
-            // x + y % 8 / 4 * 4 => x + (y & 4)
+            // x + y % 8 / 4 * 16 => x + ((y & 4) << 2)
             if (k % 4 == 0 && row0 + ii + rowIdA < m && kk + physical_colIdA + 3 < k)
             {
                 float4 tmp = CONST_FLOAT4(A[batchStartA + (row0 + physical_rowIdA) * k + (kk + physical_colIdA)]);
-                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 0) & 4)) & (TILEM - 1);
+                logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 0) & 4) << 2)) & (TILEM - 1);
                 sharedTileA[physical_colIdA + 0][logical_rowIdA] = tmp.x;
-                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 1) & 4)) & (TILEM - 1);
+                logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 1) & 4) << 2)) & (TILEM - 1);
                 sharedTileA[physical_colIdA + 1][logical_rowIdA] = tmp.y;
-                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 2) & 4)) & (TILEM - 1);
+                logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 2) & 4) << 2)) & (TILEM - 1);
                 sharedTileA[physical_colIdA + 2][logical_rowIdA] = tmp.z;
-                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 3) & 4)) & (TILEM - 1);
+                logical_rowIdA = (physical_rowIdA + (((physical_colIdA + 3) & 4) << 2)) & (TILEM - 1);
                 sharedTileA[physical_colIdA + 3][logical_rowIdA] = tmp.w;
             }
             else
             {
                 for (int fi = 0; fi < 4; ++fi)
                 {
-                    logical_rowIdA = (physical_rowIdA + ((physical_colIdA + fi) & 4)) & (TILEM - 1);
+                    logical_rowIdA = (physical_rowIdA + (((physical_colIdA + fi) & 4) << 2)) & (TILEM - 1);
                     sharedTileA[physical_colIdA + fi][logical_rowIdA] =
                         row0 + physical_rowIdA < m && kk + physical_colIdA + fi < k ? A[batchStartA + (row0 + physical_rowIdA) * k + (kk + physical_colIdA + fi)] : 0.0f;
                 }
@@ -121,7 +121,7 @@ __global__ void bmm_kernel_v52(const float *A, const float *B, float *C,
         {
             for (int ii = 0; ii < TILEM; ii += blockLayoutRowC << 2)
             {
-                int logical_rowIdC = (ii + physical_rowIdC + (tk & 4)) & (TILEM - 1); // swizzle
+                int logical_rowIdC = (ii + physical_rowIdC + ((tk & 4) << 2)) & (TILEM - 1); // swizzle
                 FLOAT4(regA[ii / blockLayoutRowC]) = FLOAT4(sharedTileA[tk][logical_rowIdC]);
             }
 
