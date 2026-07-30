@@ -11,7 +11,7 @@ template <int WARPSIZE, int BLOCKSIZE,
           int warpLayoutRowA, int warpLayoutColA,
           int warpLayoutRowB, int warpLayoutColB,
           int warpLayoutRowC, int warpLayoutColC>
-__global__ void bmm_kernel_v51(const float *A, const float *B, float *C,
+__global__ void bmm_kernel_v52(const float *A, const float *B, float *C,
                               int bs, int m, int n, int k)
 {
     int batchStartA = blockIdx.z * m * k;
@@ -71,24 +71,24 @@ __global__ void bmm_kernel_v51(const float *A, const float *B, float *C,
             int logical_rowIdA = 0; // swizzle
             int physical_rowIdA = ii + rowIdA;
             int physical_colIdA = colIdA << 2;
-            // x + y % 32 / 4 * 4 => x + (y & 28)
+            // x + y % 8 / 4 * 4 => x + (y & 4)
             if (k % 4 == 0 && row0 + ii + rowIdA < m && kk + physical_colIdA + 3 < k)
             {
                 float4 tmp = CONST_FLOAT4(A[batchStartA + (row0 + physical_rowIdA) * k + (kk + physical_colIdA)]);
-                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 0) & 28)) & (TILEM - 1);
+                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 0) & 4)) & (TILEM - 1);
                 sharedTileA[physical_colIdA + 0][logical_rowIdA] = tmp.x;
-                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 1) & 28)) & (TILEM - 1);
+                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 1) & 4)) & (TILEM - 1);
                 sharedTileA[physical_colIdA + 1][logical_rowIdA] = tmp.y;
-                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 2) & 28)) & (TILEM - 1);
+                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 2) & 4)) & (TILEM - 1);
                 sharedTileA[physical_colIdA + 2][logical_rowIdA] = tmp.z;
-                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 3) & 28)) & (TILEM - 1);
+                logical_rowIdA = (physical_rowIdA + ((physical_colIdA + 3) & 4)) & (TILEM - 1);
                 sharedTileA[physical_colIdA + 3][logical_rowIdA] = tmp.w;
             }
             else
             {
                 for (int fi = 0; fi < 4; ++fi)
                 {
-                    logical_rowIdA = (physical_rowIdA + ((physical_colIdA + fi) & 28)) & (TILEM - 1);
+                    logical_rowIdA = (physical_rowIdA + ((physical_colIdA + fi) & 4)) & (TILEM - 1);
                     sharedTileA[physical_colIdA + fi][logical_rowIdA] =
                         row0 + physical_rowIdA < m && kk + physical_colIdA + fi < k ? A[batchStartA + (row0 + physical_rowIdA) * k + (kk + physical_colIdA + fi)] : 0.0f;
                 }
@@ -121,7 +121,7 @@ __global__ void bmm_kernel_v51(const float *A, const float *B, float *C,
         {
             for (int ii = 0; ii < TILEM; ii += blockLayoutRowC << 2)
             {
-                int logical_rowIdC = (ii + physical_rowIdC + (tk & 28)) & (TILEM - 1); // swizzle
+                int logical_rowIdC = (ii + physical_rowIdC + (tk & 4)) & (TILEM - 1); // swizzle
                 FLOAT4(regA[ii / blockLayoutRowC]) = FLOAT4(sharedTileA[tk][logical_rowIdC]);
             }
 
@@ -171,7 +171,7 @@ __global__ void bmm_kernel_v51(const float *A, const float *B, float *C,
     return;
 }
 
-int bmm_v51(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
+int bmm_v52(const float *A, const float *B, float *C, int bs, int m, int n, int k, cudaStream_t stream)
 {
     const int warpSize = 32;
     const int blockSize = 256;
@@ -179,12 +179,12 @@ int bmm_v51(const float *A, const float *B, float *C, int bs, int m, int n, int 
 
     const int tileM = 128;
     const int tileN = 128;
-    const int tileK = 32;
+    const int tileK = 8;
     // block 在处理 sharedTileA 时的布局;
-    const int blockLayoutRowA = blockSize / (tileK / 4);   // 32
-    const int blockLayoutColA = tileK / 4;                 // 8
-    const int warpLayoutRowA = warpSize / blockLayoutColA; // 4
-    const int warpLayoutColA = blockLayoutColA;            // 8
+    const int blockLayoutRowA = blockSize / (tileK / 4);   // 128
+    const int blockLayoutColA = tileK / 4;                 // 2
+    const int warpLayoutRowA = warpSize / blockLayoutColA; // 16
+    const int warpLayoutColA = blockLayoutColA;            // 2
     // block 在处理 sharedTileB 时的布局;
     const int blockLayoutRowB = blockSize / (tileN / 4);   // 8
     const int blockLayoutColB = tileN / 4;                 // 32
@@ -204,7 +204,7 @@ int bmm_v51(const float *A, const float *B, float *C, int bs, int m, int n, int 
     int gridDim_x = (n + tileN - 1) / tileN;
     dim3 gridDims(gridDim_x, gridDim_y, gridDim_z);
 
-    bmm_kernel_v51<warpSize, blockSize, tileM, tileN, tileK,
+    bmm_kernel_v52<warpSize, blockSize, tileM, tileN, tileK,
                   blockLayoutRowA, blockLayoutColA, blockLayoutRowB, blockLayoutColB, blockLayoutRowC, blockLayoutColC,
                   warpLayoutRowA, warpLayoutColA, warpLayoutRowB, warpLayoutColB, warpLayoutRowC, warpLayoutColC>
         <<<gridDims, blockDims, 0, stream>>>(A, B, C, bs, m, n, k);
