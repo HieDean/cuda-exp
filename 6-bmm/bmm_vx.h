@@ -62,3 +62,6 @@ int bmm_v52(const float *A, const float *B, float *C,
 
 int bmm_v6(const float *A, const float *B, float *C,
            int bs, int m, int n, int k, cudaStream_t stream);
+
+int bmm_v7(const float *A, const float *B, float *C,
+           int bs, int m, int n, int k, cudaStream_t stream);
