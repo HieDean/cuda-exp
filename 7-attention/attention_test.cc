@@ -4,13 +4,10 @@
 #include <vector>
 #include <chrono>
 
-#include <cuda_runtime.h>
-#include <cublas_v2.h>
-
 #include "utils.h"
-#include "bmm_vx.h"
+#include "attention_vx.h"
 
-using KernelFunc = int (*)(const float *, const float *, const float *, const float *,
+using KernelFunc = int (*)(const float *, const float *, const float *, const int *,
                            float *, float *, float *, int, int, int, int, cudaStream_t);
 
 void helper(KernelFunc func,
@@ -21,9 +18,11 @@ void helper(KernelFunc func,
             std::string tag)
 {
     // first time, only run for correctness check
-    checkCudaErrors(cudaMemsetAsync(L, 0, L.size() * sizeof(float), stream));
-    checkCudaErrors(cudaMemsetAsync(M, 0, M.size() * sizeof(float), stream));
+    checkCudaErrors(cudaMemsetAsync(L, 0, l.size() * sizeof(float), stream));
     checkCudaErrors(cudaMemsetAsync(O, 0, o.size() * sizeof(float), stream));
+    std::vector tmp_m(bs * num_heads * seq_len, -INFINITY);
+    checkCudaErrors(cudaMemcpyAsync(M, tmp_m.data(), tmp_m.size() * sizeof(float),
+                                    cudaMemcpyHostToDevice, stream));
     func(Q, K, V, attnMasks, L, M, O, bs, num_heads, seq_len, head_dim, stream);
     checkCudaErrors(cudaStreamSynchronize(stream));
 
@@ -93,8 +92,7 @@ int host_attention(const float *q, const float *k, const float *v, const int *at
                    int bs, int num_heads, int seq_len, int head_dim)
 {
     float scale = 1.0f / sqrtf(static_cast<float>(head_dim));
-    float *attn_weights[bs * num_heads * seq_len * seq_len];
-    memset(attn_weights, 0, bs * num_heads * seq_len * seq_len * sizeof(float));
+    std::vector<float> attn_weights(bs * num_heads * seq_len * seq_len, 0.0f);
     memset(o, 0, bs * num_heads * seq_len * head_dim * sizeof(float));
     for (int bn = 0; bn < bs * num_heads; ++bn)
     {
@@ -124,19 +122,19 @@ int host_attention(const float *q, const float *k, const float *v, const int *at
         }
 
         // apply mask
-        if (attn_masks != nullptr)
-        {
-            for (int ii = 0; ii < seq_len; ++ii)
-            {
-                for (int jj = 0; jj < seq_len; ++jj)
-                {
-                    if (attn_masks[weights_offset + ii * seq_len + jj] == 0)
-                    {
-                        attn_weights[weights_offset + ii * seq_len + jj] = -1e9f;
-                    }
-                }
-            }
-        }
+        // if (attn_masks != nullptr)
+        // {
+        //     for (int ii = 0; ii < seq_len; ++ii)
+        //     {
+        //         for (int jj = 0; jj < seq_len; ++jj)
+        //         {
+        //             if (attn_masks[weights_offset + ii * seq_len + jj] == 0)
+        //             {
+        //                 attn_weights[weights_offset + ii * seq_len + jj] = -1e9f;
+        //             }
+        //         }
+        //     }
+        // }
 
         // online safe softmax
         for (int ii = 0; ii < seq_len; ++ii)
@@ -157,8 +155,8 @@ int host_attention(const float *q, const float *k, const float *v, const int *at
                     expf(attn_weights[weights_offset + ii * seq_len + jj] - max) / sum;
             }
 
-            l[weights_offset + ii] = sum;
-            m[weights_offset + ii] = max;
+            l[bn * seq_len + ii] = sum;
+            m[bn * seq_len + ii] = max;
         }
 
         // o: attn_weight @ v
@@ -265,7 +263,7 @@ int main(int argc, char **argv)
            Q, K, V, attnMasks,
            L, M, O,
            bs, num_heads, seq_len, head_dim, stream,
-           10, 50, attn_weights, o, "attention_v0");
+           10, 50, l, m, o, "attention_v0");
 
     {
     }
